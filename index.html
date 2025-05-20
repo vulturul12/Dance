@@ -142,6 +142,9 @@
     let votes = [];
     let resultsVisible = false;
     let currentWeek = 1;
+    let unsubscribeVideos = null;
+    let unsubscribeVotes = null;
+    let unsubscribeWeek = null;
 
     // Navigation: Show specific page
     window.showPage = function(pageId) {
@@ -298,17 +301,42 @@
         return;
       }
       try {
+        const oldWeek = currentWeek;
         currentWeek++;
+        console.log('Resetting to week:', currentWeek);
+
+        // Delete all videos and votes from the old week
+        const oldVideos = await getDocs(collection(db, 'weeks', `week-${oldWeek}`, 'videos'));
+        for (const doc of oldVideos.docs) {
+          await deleteDoc(doc.ref);
+        }
+        const oldVotes = await getDocs(collection(db, 'weeks', `week-${oldWeek}`, 'votes'));
+        for (const doc of oldVotes.docs) {
+          await deleteDoc(doc.ref);
+        }
+        console.log(`Cleared videos and votes for week-${oldWeek}`);
+
+        // Initialize new week
         videos = [];
         votes = [];
         resultsVisible = false;
         await setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible: false });
+        await setDoc(doc(db, 'weeks', 'current'), { week: currentWeek });
+        console.log('Initialized week:', currentWeek);
+
+        // Unsubscribe old listeners and reinitialize
+        if (unsubscribeVideos) unsubscribeVideos();
+        if (unsubscribeVotes) unsubscribeVotes();
+        if (unsubscribeWeek) unsubscribeWeek();
+        initFirestore();
+
+        // Update UI
         renderAdminVideos();
         renderVideos();
         renderVoteForm();
         renderAdminVotes();
         updateToggleResultsButton();
-        console.log('Week reset to:', currentWeek);
+        console.log('Week reset complete');
       } catch (error) {
         console.error('Error resetting week:', error.message, error.code);
         alert('Error resetting week: ' + error.message);
@@ -406,13 +434,13 @@
       try {
         // Initialize week document
         setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible: false }, { merge: true })
-          .then(() => console.log('Week document initialized'))
+          .then(() => console.log('Week document initialized for week:', currentWeek))
           .catch(error => console.error('Error initializing week document:', error));
 
         // Listen for videos
-        onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'videos'), snapshot => {
+        unsubscribeVideos = onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'videos'), snapshot => {
           videos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          console.log('Videos fetched:', videos);
+          console.log('Videos fetched for week-', currentWeek, ':', videos);
           renderVideos();
           renderVoteForm();
           renderAdminVideos();
@@ -423,9 +451,9 @@
         });
 
         // Listen for votes
-        onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'votes'), snapshot => {
+        unsubscribeVotes = onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'votes'), snapshot => {
           votes = snapshot.docs.map(doc => ({ voterName: doc.id, votes: doc.data().votes }));
-          console.log('Votes fetched:', votes);
+          console.log('Votes fetched for week-', currentWeek, ':', votes);
           renderAdminVotes();
           renderResults();
         }, error => {
@@ -434,9 +462,9 @@
         });
 
         // Listen for results visibility
-        onSnapshot(doc(db, 'weeks', `week-${currentWeek}`), docSnapshot => {
+        unsubscribeWeek = onSnapshot(doc(db, 'weeks', `week-${currentWeek}`), docSnapshot => {
           resultsVisible = docSnapshot.data()?.resultsVisible || false;
-          console.log('Results visibility:', resultsVisible);
+          console.log('Results visibility for week-', currentWeek, ':', resultsVisible);
           updateToggleResultsButton();
           renderResults();
         }, error => {
@@ -449,10 +477,31 @@
       }
     }
 
-    // Initialize
-    console.log('Initializing site');
-    initFirestore();
-    window.showPage('home');
+    // Load current week and initialize
+    async function initialize() {
+      console.log('Initializing site');
+      if (!db) {
+        console.error('Firestore not initialized');
+        alert('Database not connected. Please check your Firebase setup.');
+        return;
+      }
+      try {
+        const weekDoc = await getDoc(doc(db, 'weeks', 'current'));
+        if (weekDoc.exists()) {
+          currentWeek = weekDoc.data().week || 1;
+        } else {
+          await setDoc(doc(db, 'weeks', 'current'), { week: 1 });
+        }
+        console.log('Current week loaded:', currentWeek);
+        initFirestore();
+        window.showPage('home');
+      } catch (error) {
+        console.error('Error loading current week:', error.message, error.code);
+        alert('Error initializing site: ' + error.message);
+      }
+    }
+
+    initialize();
   </script>
 </body>
 </html>
