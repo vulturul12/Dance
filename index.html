@@ -107,9 +107,9 @@
   <script type="module">
     // Import Firebase modular SDK
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-    import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+    import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
-    // Firebase configuration
+    // Firebase configuration (PASTE YOUR NEW CONFIG HERE)
     const firebaseConfig = {
   apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
   authDomain: "new-latino-dance-contest.firebaseapp.com",
@@ -123,6 +123,9 @@
     // Initialize Firebase with error handling
     let db;
     try {
+      if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_NEW_API_KEY") {
+        throw new Error("Invalid or missing API key. Please update firebaseConfig with a valid key.");
+      }
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       console.log('Firebase initialized successfully');
@@ -131,7 +134,7 @@
       console.log('Firestore test write successful');
     } catch (error) {
       console.error('Firebase initialization failed:', error.message, error.code);
-      alert('Failed to connect to the database. Error: ' + error.message);
+      alert('Failed to connect to the database. Error: ' + error.message + ' (Code: ' + (error.code || 'N/A') + ')');
     }
 
     const ADMIN_PASSWORD = "salsa2025"; // Change to a secure password
@@ -140,7 +143,7 @@
     let resultsVisible = false;
     let currentWeek = 1;
 
-    // Ensure showPage is defined before any onclick handlers
+    // Ensure showPage is defined
     window.showPage = function(pageId) {
       console.log('Showing page:', pageId);
       document.querySelectorAll('main section').forEach(section => section.classList.add('hidden'));
@@ -151,7 +154,7 @@
       if (pageId === 'admin') document.getElementById('admin-panel').classList.add('hidden');
     };
 
-    // Initialize Firestore listeners with error handling
+    // Initialize Firestore listeners
     function initFirestore() {
       if (!db) {
         console.error('Firestore not initialized');
@@ -237,7 +240,7 @@
       });
     }
 
-    async function submitVote() {
+    window.submitVote = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
@@ -289,7 +292,7 @@
       }
     };
 
-    async function addVideo() {
+    window.addVideo = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
@@ -316,7 +319,7 @@
       }
     }
 
-    async function deleteVideo(videoId) {
+    window.deleteVideo = async function(videoId) {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
@@ -351,7 +354,7 @@
       });
     }
 
-    async function deleteVote(voterName) {
+    window.deleteVote = async function(voterName) {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
@@ -378,7 +381,113 @@
       });
     }
 
-    async function toggleResults() {
+    window.toggleResults = async function() {
+      if (!db) {
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      try {
+        console.log('Toggling results visibility to:', !resultsVisible);
+        resultsVisible = !resultsVisible;
+        await setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible }, { merge: true });
+        updateToggleResultsButton();
+        console.log('Results visibility updated');
+      } else {
+        console.log('Incorrect password');
+        alert('Incorrect password.');
+      }
+    };
+
+    window.addVideo = async function() {
+      if (!db) {
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      const url = document.getElementById('video-url').value.trim();
+      if (!url.includes('youtube.com/watch?v=')) {
+        alert('Please enter a valid YouTube URL.');
+        return;
+      }
+      const id = url.split('v=')[1].split('&')[0];
+      const title = `Video ${videos.length + 1}`;
+      try {
+        console.log('Adding video:', { title, url: `https://www.youtube.com/embed/${id}` });
+        await setDoc(doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos')), {
+          id: Date.now().toString(),
+          title,
+          url: `https://www.youtube.com/embed/${id}`
+        });
+        document.getElementById('video-url').value = '';
+        console.log('Video added successfully');
+      } catch (error) {
+        console.error('Error adding video:', error.message, error.code);
+        alert('Error adding video: ' + error.message);
+      }
+    }
+
+    window.deleteVideo = async function(videoId) {
+      if (!db) {
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      try {
+        console.log('Deleting video:', videoId);
+        await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'videos', videoId));
+        const voteDocs = await getDocs(collection(db, 'weeks', `week-${currentWeek}`, 'votes'));
+        for (const voteDoc of voteDocs) {
+          const voteData = voteDoc.data();
+          const updatedVotes = voteData.votes.filter(v => v.id !== videoId);
+          if (updatedVotes.length !== voteData.votes.length) {
+            await setDoc(voteDoc.ref, { votes: updatedVotes });
+          }
+        }
+        console.log('Video deleted successfully');
+      } catch (error) {
+        console.error('Error deleting video:', error.message, error.code);
+        alert('Error deleting video: ' + error.message);
+      }
+    }
+
+    function renderAdminVideos() {
+      const videoList = document.getElementById('admin-video-list');
+      videoList.innerHTML = '';
+      videos.forEach(video => {
+        videoList.innerHTML += `
+          <li class="flex justify-between">
+            <span>${video.title}</span>
+            <button onclick="deleteVideo('${video.id}')" class="text-red-400 hover:text-red-600">Delete</button>
+          </li>`;
+      });
+    }
+
+    window.deleteVote = async function(voterName) {
+      if (!db) {
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      try {
+        console.log('Deleting vote for:', voterName);
+        await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'votes', voterName));
+        console.log('Vote deleted successfully');
+      } catch (error) {
+        console.error('Error deleting vote:', error.message, error.code);
+        alert('Error deleting vote: ' + error.message);
+      }
+    }
+
+    function renderAdminVotes() {
+      const voteList = document.getElementById('vote-list');
+      voteList.innerHTML = '';
+      votes.forEach(vote => {
+        voteList.innerHTML += `
+          <li class="flex justify-between">
+            <span>${vote.voterName}</span>
+            <button onclick="deleteVote('${vote.voterName}')" class="text-red-400 hover:text-red-600">Delete</button>
+          </li>`;
+      });
+    }
+
+    window.toggleResults = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
@@ -399,7 +508,7 @@
       document.getElementById('toggle-results-btn').textContent = resultsVisible ? 'Hide Results' : 'Show Results';
     }
 
-    async function resetWeek() {
+    window.resetWeek = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
@@ -421,6 +530,26 @@
         console.error('Error resetting week:', error.message, error.code);
         alert('Error resetting week: ' + error.message);
       }
+    }
+
+    function renderResults() {
+      const resultsContent = document.getElementById('results-content');
+      resultsContent.innerHTML = '';
+      if (!resultsVisible) {
+        resultsContent.innerHTML = '<p>Results are hidden by the admin.</p>';
+        return;
+      }
+      const videoScores = {};
+      videos.forEach(video => videoScores[video.id] = { title: video.title, points: 0 });
+      votes.forEach(vote => {
+        vote.votes.forEach(v => {
+          if (videoScores[v.id]) videoScores[v.id].points += v.points;
+        });
+      });
+      const sortedVideos = Object.values(videoScores).sort((a, b) => b.points - a.points);
+      sortedVideos.forEach(video => {
+        resultsContent.innerHTML += `<p>${video.title}: ${video.points} points</p>`;
+      });
     }
 
     // Initialize
