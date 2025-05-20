@@ -101,15 +101,59 @@
   </main>
 
   <footer class="bg-red-800 p-4 text-center">
-    <p>&copy; 2025 Latino Dance Video Contest</p>
+    <p>© 2025 Latino Dance Video Contest</p>
   </footer>
 
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"></script>
   <script>
+    // Firebase configuration (replace with your Firebase project config)
+    const firebaseConfig = {
+      // PASTE YOUR FIREBASE CONFIG HERE (from Firebase Console > Project Settings > Web App)
+    apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
+  authDomain: "new-latino-dance-contest.firebaseapp.com",
+  projectId: "new-latino-dance-contest",
+  storageBucket: "new-latino-dance-contest.firebasestorage.app",
+  messagingSenderId: "453438352391",
+  appId: "1:453438352391:web:abe5808bf7ca7243bc8ea2",
+  measurementId: "G-EDDB6PH5JY"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
     const ADMIN_PASSWORD = "salsa2025"; // Change this to a secure password
-    let videos = JSON.parse(localStorage.getItem('videos')) || [];
-    let votes = JSON.parse(localStorage.getItem('votes')) || [];
-    let resultsVisible = JSON.parse(localStorage.getItem('resultsVisible')) || false;
-    let currentWeek = JSON.parse(localStorage.getItem('currentWeek')) || { week: 1, videos: [], votes: [] };
+    let videos = [];
+    let votes = [];
+    let resultsVisible = false;
+    let currentWeek = 1;
+
+    // Initialize Firestore listeners
+    function initFirestore() {
+      // Listen for videos
+      db.collection('weeks').doc(`week-${currentWeek}`).collection('videos').onSnapshot(snapshot => {
+        videos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderVideos();
+        renderVoteForm();
+        renderAdminVideos();
+        renderResults();
+      });
+
+      // Listen for votes
+      db.collection('weeks').doc(`week-${currentWeek}`).collection('votes').onSnapshot(snapshot => {
+        votes = snapshot.docs.map(doc => ({ voterName: doc.id, votes: doc.data().votes }));
+        renderAdminVotes();
+        renderResults();
+      });
+
+      // Listen for results visibility
+      db.collection('weeks').doc(`week-${currentWeek}`).onSnapshot(doc => {
+        resultsVisible = doc.data()?.resultsVisible || false;
+        updateToggleResultsButton();
+        renderResults();
+      });
+    }
 
     function showPage(pageId) {
       document.querySelectorAll('main section').forEach(section => section.classList.add('hidden'));
@@ -144,7 +188,7 @@
       });
     }
 
-    function submitVote() {
+    async function submitVote() {
       const voterName = document.getElementById('voter-name').value.trim();
       const vote1 = document.getElementById('vote1').value;
       const vote2 = document.getElementById('vote2').value;
@@ -158,17 +202,20 @@
         alert('Please select different videos for each choice.');
         return;
       }
-      if (votes.some(vote => vote.voterName.toLowerCase() === voterName.toLowerCase())) {
-        alert('You have already voted this week.');
-        return;
+      try {
+        const voteRef = db.collection('weeks').doc(`week-${currentWeek}`).collection('votes').doc(voterName);
+        const doc = await voteRef.get();
+        if (doc.exists) {
+          alert('You have already voted this week.');
+          return;
+        }
+        await voteRef.set({ votes: [{ id: vote1, points: 3 }, { id: vote2, points: 2 }, { id: vote3, points: 1 }] });
+        document.getElementById('vote-form').reset();
+        document.getElementById('vote-message').classList.remove('hidden');
+        setTimeout(() => document.getElementById('vote-message').classList.add('hidden'), 3000);
+      } catch (error) {
+        alert('Error submitting vote: ' + error.message);
       }
-
-      votes.push({ voterName, votes: [{ id: vote1, points: 3 }, { id: vote2, points: 2 }, { id: vote3, points: 1 }] });
-      localStorage.setItem('votes', JSON.stringify(votes));
-      document.getElementById('vote-form').reset();
-      document.getElementById('vote-message').classList.remove('hidden');
-      setTimeout(() => document.getElementById('vote-message').classList.add('hidden'), 3000);
-      renderAdminVotes();
     }
 
     function renderResults() {
@@ -213,7 +260,7 @@
       }
     }
 
-    function addVideo() {
+    async function addVideo() {
       const url = document.getElementById('video-url').value.trim();
       if (!url.includes('youtube.com/watch?v=')) {
         alert('Please enter a valid YouTube URL.');
@@ -221,26 +268,33 @@
       }
       const id = url.split('v=')[1].split('&')[0];
       const title = `Video ${videos.length + 1}`;
-      videos.push({ id: Date.now().toString(), title, url: `https://www.youtube.com/embed/${id}` });
-      localStorage.setItem('videos', JSON.stringify(videos));
-      document.getElementById('video-url').value = '';
-      renderAdminVideos();
-      renderVideos();
-      renderVoteForm();
+      try {
+        await db.collection('weeks').doc(`week-${currentWeek}`).collection('videos').add({
+          id: Date.now().toString(),
+          title,
+          url: `https://www.youtube.com/embed/${id}`
+        });
+        document.getElementById('video-url').value = '';
+      } catch (error) {
+        alert('Error adding video: ' + error.message);
+      }
     }
 
-    function deleteVideo(videoId) {
-      videos = videos.filter(video => video.id !== videoId);
-      votes = votes.map(vote => ({
-        ...vote,
-        votes: vote.votes.filter(v => v.id !== videoId)
-      }));
-      localStorage.setItem('videos', JSON.stringify(videos));
-      localStorage.setItem('votes', JSON.stringify(votes));
-      renderAdminVideos();
-      renderVideos();
-      renderVoteForm();
-      renderAdminVotes();
+    async function deleteVideo(videoId) {
+      try {
+        await db.collection('weeks').doc(`week-${currentWeek}`).collection('videos').doc(videoId).delete();
+        // Remove votes for this video
+        const voteDocs = await db.collection('weeks').doc(`week-${currentWeek}`).collection('votes').get();
+        voteDocs.forEach(async doc => {
+          const voteData = doc.data();
+          const updatedVotes = voteData.votes.filter(v => v.id !== videoId);
+          if (updatedVotes.length !== voteData.votes.length) {
+            await doc.ref.set({ votes: updatedVotes });
+          }
+        });
+      } catch (error) {
+        alert('Error deleting video: ' + error.message);
+      }
     }
 
     function renderAdminVideos() {
@@ -255,11 +309,12 @@
       });
     }
 
-    function deleteVote(voterName) {
-      votes = votes.filter(vote => vote.voterName !== voterName);
-      localStorage.setItem('votes', JSON.stringify(votes));
-      renderAdminVotes();
-      renderResults();
+    async function deleteVote(voterName) {
+      try {
+        await db.collection('weeks').doc(`week-${currentWeek}`).collection('votes').doc(voterName).delete();
+      } catch (error) {
+        alert('Error deleting vote: ' + error.message);
+      }
     }
 
     function renderAdminVotes() {
@@ -274,34 +329,39 @@
       });
     }
 
-    function toggleResults() {
-      resultsVisible = !resultsVisible;
-      localStorage.setItem('resultsVisible', JSON.stringify(resultsVisible));
-      updateToggleResultsButton();
-      renderResults();
+    async function toggleResults() {
+      try {
+        resultsVisible = !resultsVisible;
+        await db.collection('weeks').doc(`week-${currentWeek}`).set({ resultsVisible }, { merge: true });
+        updateToggleResultsButton();
+      } catch (error) {
+        alert('Error toggling results: ' + error.message);
+      }
     }
 
     function updateToggleResultsButton() {
       document.getElementById('toggle-results-btn').textContent = resultsVisible ? 'Hide Results' : 'Show Results';
     }
 
-    function resetWeek() {
-      currentWeek = { week: currentWeek.week + 1, videos, votes };
-      localStorage.setItem(`week-${currentWeek.week - 1}`, JSON.stringify(currentWeek));
-      videos = [];
-      votes = [];
-      resultsVisible = false;
-      localStorage.setItem('videos', JSON.stringify(videos));
-      localStorage.setItem('votes', JSON.stringify(votes));
-      localStorage.setItem('resultsVisible', JSON.stringify(resultsVisible));
-      renderAdminVideos();
-      renderVideos();
-      renderVoteForm();
-      renderAdminVotes();
-      updateToggleResultsButton();
+    async function resetWeek() {
+      try {
+        currentWeek++;
+        videos = [];
+        votes = [];
+        resultsVisible = false;
+        await db.collection('weeks').doc(`week-${currentWeek}`).set({ resultsVisible: false });
+        renderAdminVideos();
+        renderVideos();
+        renderVoteForm();
+        renderAdminVotes();
+        updateToggleResultsButton();
+      } catch (error) {
+        alert('Error resetting week: ' + error.message);
+      }
     }
 
     // Initialize
+    initFirestore();
     showPage('home');
   </script>
 </body>
