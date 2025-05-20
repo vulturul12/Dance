@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Latino Dance Video Contest</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1920');
+      background-size: cover;
+      background-attachment: fixed;
+      color: white;
+    }
+    .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; }
+    .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+  <header class="bg-red-800 p-4 text-center">
+    <h1 class="text-3xl font-bold">Latino Dance Video Contest</h1>
+    <nav class="mt-2">
+      <button onclick="showPage('home')" class="mx-2 text-white hover:underline">Home</button>
+      <button onclick="showPage('voting')" class="mx-2 text-white hover:underline">Voting</button>
+      <button onclick="showPage('results')" class="mx-2 text-white hover:underline">Results</button>
+      <button onclick="showPage('admin')" class="mx-2 text-white hover:underline">Admin</button>
+    </nav>
+  </header>
+
+  <main class="flex-grow p-4 max-w-4xl mx-auto w-full">
+    <!-- Home Page -->
+    <section id="home" class="space-y-4">
+      <h2 class="text-2xl font-semibold">Welcome to the Latino Dance Contest!</h2>
+      <p>Watch this week's Latino dance videos and vote for your top 3 favorites. Voting is open to everyone—just submit your name when you vote. Check the Results page to see the winners!</p>
+      <div id="video-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </section>
+
+    <!-- Voting Page -->
+    <section id="voting" class="hidden space-y-4">
+      <h2 class="text-2xl font-semibold">Vote for Your Favorite Videos</h2>
+      <p>Select your top 3 videos (1st: 3 points, 2nd: 2 points, 3rd: 1 point) and submit with your name. You can only vote once per week.</p>
+      <form id="vote-form" class="space-y-4">
+        <div>
+          <label class="block">Your Name:</label>
+          <input type="text" id="voter-name" class="w-full p-2 text-black rounded" required>
+        </div>
+        <div>
+          <label class="block">1st Choice (3 points):</label>
+          <select id="vote1" class="w-full p-2 text-black rounded" required></select>
+        </div>
+        <div>
+          <label class="block">2nd Choice (2 points):</label>
+          <select id="vote2" class="w-full p-2 text-black rounded" required></select>
+        </div>
+        <div>
+          <label class="block">3rd Choice (1 point):</label>
+          <select id="vote3" class="w-full p-2 text-black rounded" required></select>
+        </div>
+        <button type="button" onclick="submitVote()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Submit Vote</button>
+      </form>
+      <p id="vote-message" class="text-green-400 hidden">Vote submitted successfully!</p>
+    </section>
+
+    <!-- Results Page -->
+    <section id="results" class="hidden space-y-4">
+      <h2 class="text-2xl font-semibold">Voting Results</h2>
+      <div id="results-content"></div>
+    </section>
+
+    <!-- Admin Page -->
+    <section id="admin" class="hidden space-y-4">
+      <h2 class="text-2xl font-semibold">Admin Dashboard</h2>
+      <div id="admin-login" class="space-y-4">
+        <input type="password" id="admin-password" class="w-full p-2 text-black rounded" placeholder="Enter admin password">
+        <button onclick="loginAdmin()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Login</button>
+      </div>
+      <div id="admin-panel" class="hidden space-y-4">
+        <div>
+          <h3 class="text-xl">Add New Video</h3>
+          <input type="text" id="video-url" class="w-full p-2 text-black rounded" placeholder="YouTube Video URL">
+          <button onclick="addVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Add Video</button>
+        </div>
+        <div>
+          <h3 class="text-xl">Current Videos</h3>
+          <ul id="admin-video-list" class="space-y-2"></ul>
+        </div>
+        <div>
+          <h3 class="text-xl">Manage Votes</h3>
+          <ul id="vote-list" class="space-y-2"></ul>
+        </div>
+        <div>
+          <h3 class="text-xl">Results Visibility</h3>
+          <button onclick="toggleResults()" id="toggle-results-btn" class="bg-red-600 text-white p-2 rounded hover:bg-red-700"></button>
+        </div>
+        <div>
+          <h3 class="text-xl">Reset Week</h3>
+          <button onclick="resetWeek()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Start New Week</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bg-red-800 p-4 text-center">
+    <p>&copy; 2025 Latino Dance Video Contest</p>
+  </footer>
+
+  <script>
+    const ADMIN_PASSWORD = "salsa2025"; // Change this to a secure password
+    let videos = JSON.parse(localStorage.getItem('videos')) || [];
+    let votes = JSON.parse(localStorage.getItem('votes')) || [];
+    let resultsVisible = JSON.parse(localStorage.getItem('resultsVisible')) || false;
+    let currentWeek = JSON.parse(localStorage.getItem('currentWeek')) || { week: 1, videos: [], votes: [] };
+
+    function showPage(pageId) {
+      document.querySelectorAll('main section').forEach(section => section.classList.add('hidden'));
+      document.getElementById(pageId).classList.remove('hidden');
+      if (pageId === 'home') renderVideos();
+      if (pageId === 'voting') renderVoteForm();
+      if (pageId === 'results') renderResults();
+      if (pageId === 'admin') document.getElementById('admin-panel').classList.add('hidden');
+    }
+
+    function renderVideos() {
+      const videoList = document.getElementById('video-list');
+      videoList.innerHTML = '';
+      videos.forEach(video => {
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <h3 class="text-lg font-semibold">${video.title}</h3>
+          <div class="video-container">
+            <iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>
+          </div>`;
+        videoList.appendChild(div);
+      });
+    }
+
+    function renderVoteForm() {
+      const selects = [document.getElementById('vote1'), document.getElementById('vote2'), document.getElementById('vote3')];
+      selects.forEach(select => {
+        select.innerHTML = '<option value="">Select a video</option>';
+        videos.forEach(video => {
+          select.innerHTML += `<option value="${video.id}">${video.title}</option>`;
+        });
+      });
+    }
+
+    function submitVote() {
+      const voterName = document.getElementById('voter-name').value.trim();
+      const vote1 = document.getElementById('vote1').value;
+      const vote2 = document.getElementById('vote2').value;
+      const vote3 = document.getElementById('vote3').value;
+
+      if (!voterName || !vote1 || !vote2 || !vote3) {
+        alert('Please fill in all fields.');
+        return;
+      }
+      if (vote1 === vote2 || vote2 === vote3 || vote1 === vote3) {
+        alert('Please select different videos for each choice.');
+        return;
+      }
+      if (votes.some(vote => vote.voterName.toLowerCase() === voterName.toLowerCase())) {
+        alert('You have already voted this week.');
+        return;
+      }
+
+      votes.push({ voterName, votes: [{ id: vote1, points: 3 }, { id: vote2, points: 2 }, { id: vote3, points: 1 }] });
+      localStorage.setItem('votes', JSON.stringify(votes));
+      document.getElementById('vote-form').reset();
+      document.getElementById('vote-message').classList.remove('hidden');
+      setTimeout(() => document.getElementById('vote-message').classList.add('hidden'), 3000);
+      renderAdminVotes();
+    }
+
+    function renderResults() {
+      const resultsContent = document.getElementById('results-content');
+      if (!resultsVisible) {
+        resultsContent.innerHTML = '<p>Results are not yet visible. Check back later!</p>';
+        return;
+      }
+
+      const scores = videos.map(video => {
+        const totalPoints = votes.reduce((sum, vote) => {
+          const votePoints = vote.votes.find(v => v.id === video.id)?.points || 0;
+          return sum + votePoints;
+        }, 0);
+        return { ...video, points: totalPoints };
+      });
+      scores.sort((a, b) => b.points - a.points);
+      const winners = scores.slice(0, 3);
+
+      resultsContent.innerHTML = '<h3 class="text-xl">This Week\'s Winners</h3>';
+      winners.forEach((video, index) => {
+        resultsContent.innerHTML += `
+          <div>
+            <h4 class="text-lg">${index + 1}. ${video.title} (${video.points} points)</h4>
+            <div class="video-container">
+              <iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>
+            </div>
+          </div>`;
+      });
+    }
+
+    function loginAdmin() {
+      const password = document.getElementById('admin-password').value;
+      if (password === ADMIN_PASSWORD) {
+        document.getElementById('admin-login').classList.add('hidden');
+        document.getElementById('admin-panel').classList.remove('hidden');
+        renderAdminVideos();
+        renderAdminVotes();
+        updateToggleResultsButton();
+      } else {
+        alert('Incorrect password.');
+      }
+    }
+
+    function addVideo() {
+      const url = document.getElementById('video-url').value.trim();
+      if (!url.includes('youtube.com/watch?v=')) {
+        alert('Please enter a valid YouTube URL.');
+        return;
+      }
+      const id = url.split('v=')[1].split('&')[0];
+      const title = `Video ${videos.length + 1}`;
+      videos.push({ id: Date.now().toString(), title, url: `https://www.youtube.com/embed/${id}` });
+      localStorage.setItem('videos', JSON.stringify(videos));
+      document.getElementById('video-url').value = '';
+      renderAdminVideos();
+      renderVideos();
+      renderVoteForm();
+    }
+
+    function deleteVideo(videoId) {
+      videos = videos.filter(video => video.id !== videoId);
+      votes = votes.map(vote => ({
+        ...vote,
+        votes: vote.votes.filter(v => v.id !== videoId)
+      }));
+      localStorage.setItem('videos', JSON.stringify(videos));
+      localStorage.setItem('votes', JSON.stringify(votes));
+      renderAdminVideos();
+      renderVideos();
+      renderVoteForm();
+      renderAdminVotes();
+    }
+
+    function renderAdminVideos() {
+      const videoList = document.getElementById('admin-video-list');
+      videoList.innerHTML = '';
+      videos.forEach(video => {
+        videoList.innerHTML += `
+          <li class="flex justify-between">
+            <span>${video.title}</span>
+            <button onclick="deleteVideo('${video.id}')" class="text-red-400 hover:text-red-600">Delete</button>
+          </li>`;
+      });
+    }
+
+    function deleteVote(voterName) {
+      votes = votes.filter(vote => vote.voterName !== voterName);
+      localStorage.setItem('votes', JSON.stringify(votes));
+      renderAdminVotes();
+      renderResults();
+    }
+
+    function renderAdminVotes() {
+      const voteList = document.getElementById('vote-list');
+      voteList.innerHTML = '';
+      votes.forEach(vote => {
+        voteList.innerHTML += `
+          <li class="flex justify-between">
+            <span>${vote.voterName}</span>
+            <button onclick="deleteVote('${vote.voterName}')" class="text-red-400 hover:text-red-600">Delete</button>
+          </li>`;
+      });
+    }
+
+    function toggleResults() {
+      resultsVisible = !resultsVisible;
+      localStorage.setItem('resultsVisible', JSON.stringify(resultsVisible));
+      updateToggleResultsButton();
+      renderResults();
+    }
+
+    function updateToggleResultsButton() {
+      document.getElementById('toggle-results-btn').textContent = resultsVisible ? 'Hide Results' : 'Show Results';
+    }
+
+    function resetWeek() {
+      currentWeek = { week: currentWeek.week + 1, videos, votes };
+      localStorage.setItem(`week-${currentWeek.week - 1}`, JSON.stringify(currentWeek));
+      videos = [];
+      votes = [];
+      resultsVisible = false;
+      localStorage.setItem('videos', JSON.stringify(videos));
+      localStorage.setItem('votes', JSON.stringify(votes));
+      localStorage.setItem('resultsVisible', JSON.stringify(resultsVisible));
+      renderAdminVideos();
+      renderVideos();
+      renderVoteForm();
+      renderAdminVotes();
+      updateToggleResultsButton();
+    }
+
+    // Initialize
+    showPage('home');
+  </script>
+</body>
+</html>
