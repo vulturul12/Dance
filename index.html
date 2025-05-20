@@ -113,6 +113,9 @@
       </div>
       <div id="admin-panel" class="hidden space-y-4">
         <div>
+          <button onclick="logoutAdmin()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Logout</button>
+        </div>
+        <div>
           <h3 class="text-xl">Add New Video</h3>
           <input type="text" id="video-url" class="w-full p-2 text-black rounded" placeholder="YouTube Video URL">
           <button onclick="addVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Add Video</button>
@@ -150,15 +153,15 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
     import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
-    // Firebase configuration (PASTE YOUR WORKING CONFIG HERE)
+    // Firebase configuration
     const firebaseConfig = {
-  apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
-  authDomain: "new-latino-dance-contest.firebaseapp.com",
-  projectId: "new-latino-dance-contest",
-  storageBucket: "new-latino-dance-contest.firebasestorage.app",
-  messagingSenderId: "453438352391",
-  appId: "1:453438352391:web:8ccfc2a63650ff10bc8ea2",
-  measurementId: "G-L0PSE4Y3KG"
+      apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
+      authDomain: "new-latino-dance-contest.firebaseapp.com",
+      projectId: "new-latino-dance-contest",
+      storageBucket: "new-latino-dance-contest.firebasestorage.app",
+      messagingSenderId: "453438352391",
+      appId: "1:453438352391:web:8ccfc2a63650ff10bc8ea2",
+      measurementId: "G-L0PSE4Y3KG"
     };
 
     // Initialize Firebase
@@ -170,7 +173,6 @@
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       console.log('Firebase initialized successfully');
-      // Test Firestore connection
       await setDoc(doc(db, 'test', 'ping'), { timestamp: Date.now() });
       console.log('Firestore test write successful');
     } catch (error) {
@@ -184,6 +186,7 @@
     let proposals = [];
     let resultsVisible = false;
     let currentWeek = 1;
+    let isAdminLoggedIn = false; // Track admin login state
     let unsubscribeVideos = null;
     let unsubscribeVotes = null;
     let unsubscribeWeek = null;
@@ -290,7 +293,20 @@
       if (pageId === 'home') renderVideos();
       if (pageId === 'voting') renderVoteForm();
       if (pageId === 'results') renderResults();
-      if (pageId === 'admin') document.getElementById('admin-panel').classList.add('hidden');
+      if (pageId === 'admin') {
+        // Check admin login state
+        if (isAdminLoggedIn) {
+          document.getElementById('admin-login').classList.add('hidden');
+          document.getElementById('admin-panel').classList.remove('hidden');
+          renderAdminVideos();
+          renderAdminVotes();
+          renderProposals();
+          updateToggleResultsButton();
+        } else {
+          document.getElementById('admin-login').classList.remove('hidden');
+          document.getElementById('admin-panel').classList.add('hidden');
+        }
+      }
     };
 
     // Admin login
@@ -299,8 +315,10 @@
       const password = document.getElementById('admin-password').value;
       if (password === ADMIN_PASSWORD) {
         console.log('Admin login successful');
+        isAdminLoggedIn = true; // Set login state
         document.getElementById('admin-login').classList.add('hidden');
         document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('admin-password').value = ''; // Clear password field
         renderAdminVideos();
         renderAdminVotes();
         renderProposals();
@@ -309,6 +327,15 @@
         console.log('Admin login failed: incorrect password');
         alert('Incorrect password.');
       }
+    };
+
+    // Admin logout
+    window.logoutAdmin = function() {
+      console.log('Admin logout');
+      isAdminLoggedIn = false; // Reset login state
+      document.getElementById('admin-login').classList.remove('hidden');
+      document.getElementById('admin-panel').classList.add('hidden');
+      document.getElementById('admin-password').value = ''; // Clear password field
     };
 
     // Submit vote
@@ -598,12 +625,10 @@
         return;
       }
       try {
-        // Initialize week document
         setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible: false }, { merge: true })
           .then(() => console.log('Week document initialized for week:', currentWeek))
           .catch(error => console.error('Error initializing week document:', error));
 
-        // Listen for videos
         unsubscribeVideos = onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'videos'), snapshot => {
           videos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           console.log('Videos fetched for week-', currentWeek, ':', videos);
@@ -616,7 +641,6 @@
           alert('Failed to load videos: ' + error.message);
         });
 
-        // Listen for votes
         unsubscribeVotes = onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'votes'), snapshot => {
           votes = snapshot.docs.map(doc => ({ voterName: doc.id, votes: doc.data().votes }));
           console.log('Votes fetched for week-', currentWeek, ':', votes);
@@ -627,7 +651,6 @@
           alert('Failed to load votes: ' + error.message);
         });
 
-        // Listen for proposals
         unsubscribeProposals = onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'proposals'), snapshot => {
           proposals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           console.log('Proposals fetched for week-', currentWeek, ':', proposals);
@@ -637,7 +660,6 @@
           alert('Failed to load proposals: ' + error.message);
         });
 
-        // Listen for results visibility
         unsubscribeWeek = onSnapshot(doc(db, 'weeks', `week-${currentWeek}`), docSnapshot => {
           resultsVisible = docSnapshot.data()?.resultsVisible || false;
           console.log('Results visibility for week-', currentWeek, ':', resultsVisible);
