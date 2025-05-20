@@ -118,16 +118,15 @@
       if (pageId === 'admin') document.getElementById('admin-panel').classList.add('hidden');
     }
 
-    // Firebase configuration (replace with your Firebase project config)
+    // Firebase configuration
     const firebaseConfig = {
-      // PASTE YOUR FIREBASE CONFIG HERE
-  apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
-  authDomain: "new-latino-dance-contest.firebaseapp.com",
-  projectId: "new-latino-dance-contest",
-  storageBucket: "new-latino-dance-contest.firebasestorage.app",
-  messagingSenderId: "453438352391",
-  appId: "1:453438352391:web:abe5808bf7ca7243bc8ea2",
-  measurementId: "G-EDDB6PH5JY"
+      apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
+      authDomain: "new-latino-dance-contest.firebaseapp.com",
+      projectId: "new-latino-dance-contest",
+      storageBucket: "new-latino-dance-contest.firebasestorage.app",
+      messagingSenderId: "453438352391",
+      appId: "1:453438352391:web:abe5808bf7ca7243bc8ea2",
+      measurementId: "G-EDDB6PH5JY"
     };
 
     // Initialize Firebase with error handling
@@ -138,7 +137,7 @@
       console.log('Firebase initialized successfully');
     } catch (error) {
       console.error('Firebase initialization failed:', error);
-      alert('Failed to connect to the database. Check your Firebase configuration or internet connection.');
+      alert('Failed to connect to the database. Check your internet connection or Firebase setup.');
     }
 
     const ADMIN_PASSWORD = "salsa2025"; // Change this to a secure password
