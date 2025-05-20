@@ -263,35 +263,6 @@
       }
     };
 
-    // Approve video proposal
-    window.approveProposal = async function(proposalId, title, url) {
-      if (!db) {
-        console.error('Database not connected in approveProposal');
-        alert('Database not connected. Please try again later.');
-        return;
-      }
-      try {
-        const videoId = getYouTubeVideoId(url);
-        if (!videoId) {
-          console.error('Invalid YouTube URL in approveProposal:', url);
-          alert('Invalid YouTube URL in proposal.');
-          return;
-        }
-        const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
-        await setDoc(videoRef, {
-          id: videoRef.id,
-          title,
-          url: `https://www.youtube.com/embed/${videoId}`,
-          createdAt: Date.now()
-        });
-        await setDoc(doc(db, 'weeks', `week-${currentWeek}`, 'proposals', proposalId), { status: 'approved' }, { merge: true });
-        console.log('Proposal approved:', proposalId, 'Title:', title, 'URL:', url);
-      } catch (error) {
-        console.error('Error approving proposal:', error.message, error.code, 'URL:', url);
-        alert('Error approving proposal: ' + error.message);
-      }
-    };
-
     // Delete video proposal
     window.deleteProposal = async function(proposalId) {
       if (!db) {
@@ -609,7 +580,6 @@
             <li class="flex justify-between items-center">
               <span>${proposal.title} (<a href="${proposal.url}" target="_blank" class="text-blue-400 hover:underline">View</a>)</span>
               <div>
-                <button onclick="approveProposal('${proposal.id}', '${proposal.title.replace(/'/g, "\\'")}', '${proposal.url.replace(/'/g, "\\'")}')" class="text-green-400 hover:text-green-600 mr-2">Approve</button>
                 <button onclick="deleteProposal('${proposal.id}')" class="text-red-400 hover:text-red-600">Delete</button>
               </div>
             </li>`;
