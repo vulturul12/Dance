@@ -23,6 +23,8 @@
       <button onclick="showPage('home')" class="mx-2 text-white hover:underline">Home</button>
       <button onclick="showPage('voting')" class="mx-2 text-white hover:underline">Voting</button>
       <button onclick="showPage('results')" class="mx-2 text-white hover:underline">Results</button>
+      <button onclick="showPage('video-upload')" class="mx-2 text-white hover:underline">Video Upload</button>
+      <button onclick="showPage('video-proposal')" class="mx-2 text-white hover:underline">Video Proposal</button>
       <button onclick="showPage('admin')" class="mx-2 text-white hover:underline">Admin</button>
     </nav>
   </header>
@@ -67,6 +69,42 @@
       <div id="results-content"></div>
     </section>
 
+    <!-- Video Upload Page -->
+    <section id="video-upload" class="hidden space-y-4">
+      <h2 class="text-2xl font-semibold">Upload Your Dance Video</h2>
+      <p>Upload your Latino dance video to participate in the contest. Videos will be added to this week's voting options.</p>
+      <form id="video-upload-form" class="space-y-4">
+        <div>
+          <label class="block">Video Title:</label>
+          <input type="text" id="video-title" class="w-full p-2 text-black rounded" required>
+        </div>
+        <div>
+          <label class="block">Video File (MP4, MOV, max 128MB):</label>
+          <input type="file" id="video-file" accept="video/mp4,video/mov" class="w-full p-2 text-black rounded" required>
+        </div>
+        <button type="button" onclick="uploadVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Upload Video</button>
+      </form>
+      <p id="upload-message" class="text-green-400 hidden"></p>
+    </section>
+
+    <!-- Video Proposal Page -->
+    <section id="video-proposal" class="hidden space-y-4">
+      <h2 class="text-2xl font-semibold">Propose a Dance Video</h2>
+      <p>Submit a YouTube video link to be considered for the contest. An admin will review your proposal.</p>
+      <form id="proposal-form" class="space-y-4">
+        <div>
+          <label class="block">Video Title:</label>
+          <input type="text" id="proposal-title" class="w-full p-2 text-black rounded" required>
+        </div>
+        <div>
+          <label class="block">YouTube Video URL:</label>
+          <input type="text" id="proposal-url" class="w-full p-2 text-black rounded" placeholder="https://www.youtube.com/watch?v=..." required>
+        </div>
+        <button type="button" onclick="submitProposal()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Submit Proposal</button>
+      </form>
+      <p id="proposal-message" class="text-green-400 hidden">Proposal submitted successfully!</p>
+    </section>
+
     <!-- Admin Page -->
     <section id="admin" class="hidden space-y-4">
       <h2 class="text-2xl font-semibold">Admin Dashboard</h2>
@@ -79,6 +117,10 @@
           <h3 class="text-xl">Add New Video</h3>
           <input type="text" id="video-url" class="w-full p-2 text-black rounded" placeholder="YouTube Video URL">
           <button onclick="addVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Add Video</button>
+        </div>
+        <div>
+          <h3 class="text-xl">Video Proposals</h3>
+          <ul id="proposal-list" class="space-y-2"></ul>
         </div>
         <div>
           <h3 class="text-xl">Current Videos</h3>
@@ -108,6 +150,8 @@
     // Import Firebase modular SDK
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
     import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+    import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
+    import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js';
 
     // Firebase configuration (PASTE YOUR WORKING CONFIG HERE)
     const firebaseConfig = {
@@ -120,14 +164,16 @@
   measurementId: "G-L0PSE4Y3KG"
     };
 
-    // Initialize Firebase with error handling
-    let db;
+    // Initialize Firebase
+    let db, storage, functions;
     try {
       if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_WORKING_API_KEY") {
         throw new Error("Invalid or missing API key. Please update firebaseConfig with a valid key.");
       }
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
+      storage = getStorage(app);
+      functions = getFunctions(app);
       console.log('Firebase initialized successfully');
       // Test Firestore connection
       await setDoc(doc(db, 'test', 'ping'), { timestamp: Date.now() });
@@ -140,11 +186,159 @@
     const ADMIN_PASSWORD = "salsa2025"; // Change to a secure password in production
     let videos = [];
     let votes = [];
+    let proposals = [];
     let resultsVisible = false;
     let currentWeek = 1;
     let unsubscribeVideos = null;
     let unsubscribeVotes = null;
     let unsubscribeWeek = null;
+    let unsubscribeProposals = null;
+
+    // Submit video proposal
+    window.submitProposal = async function() {
+      if (!db) {
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      const title = document.getElementById('proposal-title').value.trim();
+      const url = document.getElementById('proposal-url').value.trim();
+
+      if (!title || !url) {
+        alert('Please provide a title and YouTube URL.');
+        return;
+      }
+      if (!url.includes('youtube.com/watch?v=')) {
+        alert('Please enter a valid YouTube URL.');
+        return;
+      }
+
+      try {
+        const proposalRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'proposals'));
+        await setDoc(proposalRef, {
+          id: proposalRef.id,
+          title,
+          url,
+          createdAt: Date.now(),
+          status: 'pending'
+        });
+        document.getElementById('proposal-form').reset();
+        document.getElementById('proposal-message').classList.remove('hidden');
+        setTimeout(() => document.getElementById('proposal-message').classList.add('hidden'), 3000);
+        console.log('Proposal submitted:', title);
+      } catch (error) {
+        console.error('Error submitting proposal:', error.message, error.code);
+        alert('Error submitting proposal: ' + error.message);
+      }
+    };
+
+    // Approve video proposal
+    window.approveProposal = async function(proposalId, title, url) {
+      if (!db) {
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      try {
+        const id = url.split('v=')[1].split('&')[0];
+        const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
+        await setDoc(videoRef, {
+          id: videoRef.id,
+          title,
+          url: `https://www.youtube.com/embed/${id}`,
+          createdAt: Date.now()
+        });
+        await setDoc(doc(db, 'weeks', `week-${currentWeek}`, 'proposals', proposalId), { status: 'approved' }, { merge: true });
+        console.log('Proposal approved:', proposalId);
+      } catch (error) {
+        console.error('Error approving proposal:', error.message, error.code);
+        alert('Error approving proposal: ' + error.message);
+      }
+    };
+
+    // Delete video proposal
+    window.deleteProposal = async function(proposalId) {
+      if (!db) {
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      try {
+        await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'proposals', proposalId));
+        console.log('Proposal deleted:', proposalId);
+      } catch (error) {
+        console.error('Error deleting proposal:', error.message, error.code);
+        alert('Error deleting proposal: ' + error.message);
+      }
+    };
+
+    // Upload video to Firebase Storage and call Cloud Function
+    window.uploadVideo = async function() {
+      if (!db || !storage || !functions) {
+        alert('Database or storage not connected. Please try again later.');
+        return;
+      }
+      const title = document.getElementById('video-title').value.trim();
+      const fileInput = document.getElementById('video-file');
+      const file = fileInput.files[0];
+      const uploadMessage = document.getElementById('upload-message');
+
+      if (!title || !file) {
+        alert('Please provide a title and select a video file.');
+        return;
+      }
+
+      if (file.size > 128 * 1024 * 1024) {
+        alert('File size exceeds 128MB limit.');
+        return;
+      }
+
+      if (!['video/mp4', 'video/mov'].includes(file.type)) {
+        alert('Please upload an MP4 or MOV file.');
+        return;
+      }
+
+      uploadMessage.textContent = 'Uploading video...';
+      uploadMessage.classList.remove('hidden', 'text-green-400');
+      uploadMessage.classList.add('text-yellow-400');
+
+      try {
+        // Upload to Firebase Storage
+        const storageRef = ref(storage, `videos/${currentWeek}/${file.name}_${Date.now()}`);
+        await uploadBytes(storageRef, file);
+        const storagePath = storageRef.fullPath;
+        console.log('Video uploaded to Firebase Storage:', storagePath);
+
+        // Call Cloud Function
+        const uploadVideoToYouTube = httpsCallable(functions, 'uploadVideoToYouTube');
+        const result = await uploadVideoToYouTube({ title, storagePath });
+
+        if (result.data.error) {
+          throw new Error(result.data.error);
+        }
+
+        const { videoId } = result.data;
+        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+
+        // Add to Firestore
+        const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
+        await setDoc(videoRef, {
+          id: videoRef.id,
+          title,
+          url: embedUrl,
+          createdAt: Date.now()
+        });
+
+        document.getElementById('video-upload-form').reset();
+        uploadMessage.textContent = 'Video uploaded successfully!';
+        uploadMessage.classList.remove('text-yellow-400');
+        uploadMessage.classList.add('text-green-400');
+        setTimeout(() => uploadMessage.classList.add('hidden'), 5000);
+        console.log('Video added to Firestore:', title);
+      } catch (error) {
+        console.error('Error uploading video:', error.message, error.code);
+        uploadMessage.textContent = 'Failed to upload video: ' + error.message;
+        uploadMessage.classList.remove('text-yellow-400');
+        uploadMessage.classList.add('text-red-400');
+      }
+    };
 
     // Navigation: Show specific page
     window.showPage = function(pageId) {
@@ -167,6 +361,7 @@
         document.getElementById('admin-panel').classList.remove('hidden');
         renderAdminVideos();
         renderAdminVotes();
+        renderProposals();
         updateToggleResultsButton();
       } else {
         console.log('Admin login failed: incorrect password');
@@ -211,7 +406,7 @@
       }
     };
 
-    // Add new video
+    // Add new video (Admin)
     window.addVideo = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
@@ -305,7 +500,7 @@
         currentWeek++;
         console.log('Resetting to week:', currentWeek);
 
-        // Delete all videos and votes from the old week
+        // Delete all videos, votes, and proposals from the old week
         const oldVideos = await getDocs(collection(db, 'weeks', `week-${oldWeek}`, 'videos'));
         for (const doc of oldVideos.docs) {
           await deleteDoc(doc.ref);
@@ -314,11 +509,16 @@
         for (const doc of oldVotes.docs) {
           await deleteDoc(doc.ref);
         }
-        console.log(`Cleared videos and votes for week-${oldWeek}`);
+        const oldProposals = await getDocs(collection(db, 'weeks', `week-${oldWeek}`, 'proposals'));
+        for (const doc of oldProposals.docs) {
+          await deleteDoc(doc.ref);
+        }
+        console.log(`Cleared videos, votes, and proposals for week-${oldWeek}`);
 
         // Initialize new week
         videos = [];
         votes = [];
+        proposals = [];
         resultsVisible = false;
         await setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible: false });
         await setDoc(doc(db, 'weeks', 'current'), { week: currentWeek });
@@ -328,6 +528,7 @@
         if (unsubscribeVideos) unsubscribeVideos();
         if (unsubscribeVotes) unsubscribeVotes();
         if (unsubscribeWeek) unsubscribeWeek();
+        if (unsubscribeProposals) unsubscribeProposals();
         initFirestore();
 
         // Update UI
@@ -335,6 +536,7 @@
         renderVideos();
         renderVoteForm();
         renderAdminVotes();
+        renderProposals();
         updateToggleResultsButton();
         console.log('Week reset complete');
       } catch (error) {
@@ -347,7 +549,6 @@
     function renderVideos() {
       const videoList = document.getElementById('video-list');
       videoList.innerHTML = '';
-      // Sort videos by createdAt (earliest first), fallback to Infinity for old videos
       const sortedVideos = videos.sort((a, b) => (a.createdAt || Infinity) - (b.createdAt || Infinity));
       sortedVideos.forEach(video => {
         const div = document.createElement('div');
@@ -397,6 +598,24 @@
       });
     }
 
+    // Render video proposals
+    function renderProposals() {
+      const proposalList = document.getElementById('proposal-list');
+      proposalList.innerHTML = '';
+      proposals.forEach(proposal => {
+        if (proposal.status === 'pending') {
+          proposalList.innerHTML += `
+            <li class="flex justify-between items-center">
+              <span>${proposal.title} (<a href="${proposal.url}" target="_blank" class="text-blue-400 hover:underline">View</a>)</span>
+              <div>
+                <button onclick="approveProposal('${proposal.id}', '${proposal.title.replace(/'/g, "\\'")}', '${proposal.url.replace(/'/g, "\\'")}')" class="text-green-400 hover:text-green-600 mr-2">Approve</button>
+                <button onclick="deleteProposal('${proposal.id}')" class="text-red-400 hover:text-red-600">Delete</button>
+              </div>
+            </li>`;
+        }
+      });
+    }
+
     // Update results visibility button
     function updateToggleResultsButton() {
       document.getElementById('toggle-results-btn').textContent = resultsVisible ? 'Hide Results' : 'Show Results';
@@ -418,7 +637,6 @@
         });
       });
       const sortedVideos = Object.values(videoScores).sort((a, b) => b.points - a.points);
-      // Display only top 3 videos with embedded videos
       sortedVideos.slice(0, 3).forEach(video => {
         resultsContent.innerHTML += `
           <div class="space-y-2">
@@ -465,6 +683,16 @@
         }, error => {
           console.error('Error fetching votes:', error.message, error.code);
           alert('Failed to load votes: ' + error.message);
+        });
+
+        // Listen for proposals
+        unsubscribeProposals = onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'proposals'), snapshot => {
+          proposals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          console.log('Proposals fetched for week-', currentWeek, ':', proposals);
+          renderProposals();
+        }, error => {
+          console.error('Error fetching proposals:', error.message, error.code);
+          alert('Failed to load proposals: ' + error.message);
         });
 
         // Listen for results visibility
