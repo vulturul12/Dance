@@ -107,16 +107,27 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"></script>
   <script>
+    // Ensure showPage is defined before any onclick handlers
+    function showPage(pageId) {
+      console.log('Showing page:', pageId);
+      document.querySelectorAll('main section').forEach(section => section.classList.add('hidden'));
+      document.getElementById(pageId).classList.remove('hidden');
+      if (pageId === 'home') renderVideos();
+      if (pageId === 'voting') renderVoteForm();
+      if (pageId === 'results') renderResults();
+      if (pageId === 'admin') document.getElementById('admin-panel').classList.add('hidden');
+    }
+
     // Firebase configuration (replace with your Firebase project config)
     const firebaseConfig = {
       // PASTE YOUR FIREBASE CONFIG HERE
-      apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
-      authDomain: "new-latino-dance-contest.firebaseapp.com",
-      projectId: "Ynew-latino-dance-contest",
-      storageBucket: "new-latino-dance-contest.firebasestorage.app",
-      messagingSenderId: "453438352391",
-      appId: "1:453438352391:web:abe5808bf7ca7243bc8ea2",
-      measurementId: "G-EDDB6PH5JY"
+  apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
+  authDomain: "new-latino-dance-contest.firebaseapp.com",
+  projectId: "new-latino-dance-contest",
+  storageBucket: "new-latino-dance-contest.firebasestorage.app",
+  messagingSenderId: "453438352391",
+  appId: "1:453438352391:web:abe5808bf7ca7243bc8ea2",
+  measurementId: "G-EDDB6PH5JY"
     };
 
     // Initialize Firebase with error handling
@@ -127,7 +138,7 @@
       console.log('Firebase initialized successfully');
     } catch (error) {
       console.error('Firebase initialization failed:', error);
-      alert('Failed to connect to the database. Please check your internet connection or contact support.');
+      alert('Failed to connect to the database. Check your Firebase configuration or internet connection.');
     }
 
     const ADMIN_PASSWORD = "salsa2025"; // Change this to a secure password
@@ -140,13 +151,18 @@
     function initFirestore() {
       if (!db) {
         console.error('Firestore not initialized');
+        alert('Database not connected. Please check your Firebase setup.');
         return;
       }
       try {
+        // Ensure week document exists
+        db.collection('weeks').doc(`week-${currentWeek}`).set({ resultsVisible: false }, { merge: true });
+        
         // Listen for videos
         db.collection('weeks').doc(`week-${currentWeek}`).collection('videos').onSnapshot(
           snapshot => {
             videos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log('Videos fetched:', videos);
             renderVideos();
             renderVoteForm();
             renderAdminVideos();
@@ -154,7 +170,7 @@
           },
           error => {
             console.error('Error fetching videos:', error);
-            alert('Failed to load videos. Please refresh the page.');
+            alert('Failed to load videos: ' + error.message);
           }
         );
 
@@ -162,12 +178,13 @@
         db.collection('weeks').doc(`week-${currentWeek}`).collection('votes').onSnapshot(
           snapshot => {
             votes = snapshot.docs.map(doc => ({ voterName: doc.id, votes: doc.data().votes }));
+            console.log('Votes fetched:', votes);
             renderAdminVotes();
             renderResults();
           },
           error => {
             console.error('Error fetching votes:', error);
-            alert('Failed to load votes. Please refresh the page.');
+            alert('Failed to load votes: ' + error.message);
           }
         );
 
@@ -175,27 +192,19 @@
         db.collection('weeks').doc(`week-${currentWeek}`).onSnapshot(
           doc => {
             resultsVisible = doc.data()?.resultsVisible || false;
+            console.log('Results visibility:', resultsVisible);
             updateToggleResultsButton();
             renderResults();
           },
           error => {
             console.error('Error fetching results visibility:', error);
-            alert('Failed to load results settings. Please refresh the page.');
+            alert('Failed to load results settings: ' + error.message);
           }
         );
       } catch (error) {
         console.error('Error initializing Firestore listeners:', error);
-        alert('Error connecting to the database. Please try again later.');
+        alert('Error connecting to the database: ' + error.message);
       }
-    }
-
-    function showPage(pageId) {
-      document.querySelectorAll('main section').forEach(section => section.classList.add('hidden'));
-      document.getElementById(pageId).classList.remove('hidden');
-      if (pageId === 'home') renderVideos();
-      if (pageId === 'voting') renderVoteForm();
-      if (pageId === 'results') renderResults();
-      if (pageId === 'admin') document.getElementById('admin-panel').classList.add('hidden');
     }
 
     function renderVideos() {
@@ -287,12 +296,14 @@
       const id = url.split('v=')[1].split('&')[0];
       const title = `Video ${videos.length + 1}`;
       try {
+        console.log('Adding video:', { title, url: `https://www.youtube.com/embed/${id}` });
         await db.collection('weeks').doc(`week-${currentWeek}`).collection('videos').add({
           id: Date.now().toString(),
           title,
           url: `https://www.youtube.com/embed/${id}`
         });
         document.getElementById('video-url').value = '';
+        console.log('Video added successfully');
       } catch (error) {
         console.error('Error adding video:', error);
         alert('Error adding video: ' + error.message);
@@ -305,6 +316,7 @@
         return;
       }
       try {
+        console.log('Deleting video:', videoId);
         await db.collection('weeks').doc(`week-${currentWeek}`).collection('videos').doc(videoId).delete();
         const voteDocs = await db.collection('weeks').doc(`week-${currentWeek}`).collection('votes').get();
         voteDocs.forEach(async doc => {
@@ -314,6 +326,7 @@
             await doc.ref.set({ votes: updatedVotes });
           }
         });
+        console.log('Video deleted successfully');
       } catch (error) {
         console.error('Error deleting video:', error);
         alert('Error deleting video: ' + error.message);
@@ -338,7 +351,9 @@
         return;
       }
       try {
+        console.log('Deleting vote for:', voterName);
         await db.collection('weeks').doc(`week-${currentWeek}`).collection('votes').doc(voterName).delete();
+        console.log('Vote deleted successfully');
       } catch (error) {
         console.error('Error deleting vote:', error);
         alert('Error deleting vote: ' + error.message);
@@ -363,9 +378,11 @@
         return;
       }
       try {
+        console.log('Toggling results visibility to:', !resultsVisible);
         resultsVisible = !resultsVisible;
         await db.collection('weeks').doc(`week-${currentWeek}`).set({ resultsVisible }, { merge: true });
         updateToggleResultsButton();
+        console.log('Results visibility updated');
       } catch (error) {
         console.error('Error toggling results:', error);
         alert('Error toggling results: ' + error.message);
@@ -382,6 +399,7 @@
         return;
       }
       try {
+        console.log('Resetting to week:', currentWeek + 1);
         currentWeek++;
         videos = [];
         votes = [];
@@ -392,6 +410,7 @@
         renderVoteForm();
         renderAdminVotes();
         updateToggleResultsButton();
+        console.log('Week reset successfully');
       } catch (error) {
         console.error('Error resetting week:', error);
         alert('Error resetting week: ' + error.message);
@@ -399,6 +418,7 @@
     }
 
     // Initialize
+    console.log('Initializing site');
     initFirestore();
     showPage('home');
   </script>
