@@ -402,7 +402,7 @@
       document.getElementById('toggle-results-btn').textContent = resultsVisible ? 'Hide Results' : 'Show Results';
     }
 
-    // Render results page (top 3 videos with points)
+    // Render results page (top 3 videos with points and embedded videos)
     function renderResults() {
       const resultsContent = document.getElementById('results-content');
       resultsContent.innerHTML = '';
@@ -411,16 +411,22 @@
         return;
       }
       const videoScores = {};
-      videos.forEach(video => videoScores[video.id] = { title: video.title, points: 0 });
+      videos.forEach(video => videoScores[video.id] = { title: video.title, points: 0, url: video.url });
       votes.forEach(vote => {
         vote.votes.forEach(v => {
           if (videoScores[v.id]) videoScores[v.id].points += v.points;
         });
       });
       const sortedVideos = Object.values(videoScores).sort((a, b) => b.points - a.points);
-      // Display only top 3 videos
+      // Display only top 3 videos with embedded videos
       sortedVideos.slice(0, 3).forEach(video => {
-        resultsContent.innerHTML += `<p>${video.title}: ${video.points} points</p>`;
+        resultsContent.innerHTML += `
+          <div class="space-y-2">
+            <p class="text-lg font-semibold">${video.title}: ${video.points} points</p>
+            <div class="video-container">
+              <iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>
+            </div>
+          </div>`;
       });
     }
 
