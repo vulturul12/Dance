@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Latino Dance Video Contest</title>
+  <title>Practice Poll</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('https://www.clistudios.com/wp-content/uploads/2021/08/jaquel-knight-hip-hop-1024x683.jpeg');
+      background-color: #1a202c;
+      background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('https://images.unsplash.com/photo-1519470158087-b93b595b657e?auto=format&fit=crop&w=1920');
       background-size: cover;
       background-attachment: fixed;
       color: white;
@@ -18,7 +19,7 @@
 </head>
 <body class="min-h-screen flex flex-col font-sans">
   <header class="bg-red-800 p-4 text-center">
-    <h1 class="text-3xl font-bold">Latino Dance Video Contest</h1>
+    <h1 class="text-3xl font-bold">Practice Poll</h1>
     <nav class="mt-2">
       <button onclick="showPage('home')" class="mx-2 text-white hover:underline">Home</button>
       <button onclick="showPage('voting')" class="mx-2 text-white hover:underline">Voting</button>
@@ -31,7 +32,7 @@
   <main class="flex-grow p-4 max-w-4xl mx-auto w-full">
     <!-- Home Page -->
     <section id="home" class="space-y-4">
-      <h2 class="text-2xl font-semibold">Welcome to the Latino Dance Contest!</h2>
+      <h2 class="text-2xl font-semibold">Let's Practice!</h2>
       <p>Watch this week's Latino dance videos and vote for your top 3 favorites. Voting is open to everyone—just submit your name when you vote. Check the Results page to see the winners!</p>
       <div id="video-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
     </section>
@@ -72,6 +73,23 @@
     <section id="video-proposal" class="hidden space-y-4">
       <h2 class="text-2xl font-semibold">Propose a Dance Video</h2>
       <p>Submit a YouTube video link to be considered for the contest. An admin will review your proposal.</p>
+      <div class="bg-gray-800 p-4 rounded mb-4">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-semibold">How to Upload a Video from Your Phone</h3>
+          <button onclick="toggleTutorial()" id="tutorial-toggle" class="text-blue-400 hover:text-blue-600">Hide</button>
+        </div>
+        <div id="tutorial-content" class="mt-2">
+          <p>Follow these steps to upload your dance video to YouTube, set it as Unlisted, and get the link to share:</p>
+          <ol class="list-decimal ml-6 mt-2 space-y-2">
+            <li><strong>Open YouTube App</strong>: Download and open the YouTube app (iOS: App Store, Android: Google Play). Sign in with your Google account.</li>
+            <li><strong>Upload Video</strong>: Tap the <strong>+</strong> (plus) icon (bottom center on iOS, top right on Android). Select <strong>Upload a video</strong>. Choose your dance video from your phone’s gallery.</li>
+            <li><strong>Set Details</strong>: Add a title (e.g., "My Salsa Dance"). For visibility, select <strong>Unlisted</strong> (not Public or Private) so only those with the link can view it.</li>
+            <li><strong>Publish</strong>: Tap <strong>Next</strong> or <strong>Publish</strong>. Wait for the upload to complete (time depends on video size and internet speed).</li>
+            <li><strong>Copy Link</strong>: Once uploaded, tap <strong>Share</strong> (or find the video in <strong>Your videos</strong>). Select <strong>Copy link</strong>. Paste this link into the proposal form below.</li>
+          </ol>
+          <p class="mt-2"><strong>Note</strong>: Ensure your video is under 15 minutes (or verify your account for longer videos). On iOS, the <strong>+</strong> icon may be at the bottom; on Android, it’s often at the top.</p>
+        </div>
+      </div>
       <form id="proposal-form" class="space-y-4">
         <div>
           <label class="block">Video Title:</label>
@@ -124,7 +142,7 @@
   </main>
 
   <footer class="bg-red-800 p-4 text-center">
-    <p>© 2025 Latino Dance Video Contest</p>
+    <p>Practice</p>
   </footer>
 
   <script type="module">
@@ -171,6 +189,19 @@
     let unsubscribeWeek = null;
     let unsubscribeProposals = null;
 
+    // Toggle tutorial visibility
+    window.toggleTutorial = function() {
+      const content = document.getElementById('tutorial-content');
+      const button = document.getElementById('tutorial-toggle');
+      if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        button.textContent = 'Hide';
+      } else {
+        content.classList.add('hidden');
+        button.textContent = 'Show';
+      }
+    };
+
     // Submit video proposal
     window.submitProposal = async function() {
       if (!db) {
@@ -184,7 +215,7 @@
         alert('Please provide a title and YouTube URL.');
         return;
       }
-      if (!url.includes('youtube.com/watch?v=')) {
+      if (!url.includes('youtube.com/watch?v=') && !url.includes('youtu.be/')) {
         alert('Please enter a valid YouTube URL.');
         return;
       }
@@ -215,7 +246,12 @@
         return;
       }
       try {
-        const id = url.split('v=')[1].split('&')[0];
+        let id;
+        if (url.includes('youtube.com/watch?v=')) {
+          id = url.split('v=')[1].split('&')[0];
+        } else if (url.includes('youtu.be/')) {
+          id = url.split('youtu.be/')[1].split('?')[0];
+        }
         const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
         await setDoc(videoRef, {
           id: videoRef.id,
@@ -319,11 +355,11 @@
         return;
       }
       const url = document.getElementById('video-url').value.trim();
-      if (!url.includes('youtube.com/watch?v=')) {
+      if (!url.includes('youtube.com/watch?v=') && !url.includes('youtu.be/')) {
         alert('Please enter a valid YouTube URL.');
         return;
       }
-      const id = url.split('v=')[1].split('&')[0];
+      const id = url.includes('youtube.com/watch?v=') ? url.split('v=')[1].split('&')[0] : url.split('youtu.be/')[1].split('?')[0];
       const title = `Video ${videos.length + 1}`;
       try {
         const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
