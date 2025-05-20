@@ -109,7 +109,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
     import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
-    // Firebase configuration (PASTE YOUR NEW CONFIG HERE)
+    // Firebase configuration (PASTE YOUR WORKING CONFIG HERE)
     const firebaseConfig = {
   apiKey: "AIzaSyBj0ciTxc57hsXfct1iXkf8hdd1nyN1OEs",
   authDomain: "new-latino-dance-contest.firebaseapp.com",
@@ -123,7 +123,7 @@
     // Initialize Firebase with error handling
     let db;
     try {
-      if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_NEW_API_KEY") {
+      if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_WORKING_API_KEY") {
         throw new Error("Invalid or missing API key. Please update firebaseConfig with a valid key.");
       }
       const app = initializeApp(firebaseConfig);
@@ -137,13 +137,13 @@
       alert('Failed to connect to the database. Error: ' + error.message + ' (Code: ' + (error.code || 'N/A') + ')');
     }
 
-    const ADMIN_PASSWORD = "salsa2025"; // Change to a secure password
+    const ADMIN_PASSWORD = "salsa2025"; // Change to a secure password in production
     let videos = [];
     let votes = [];
     let resultsVisible = false;
     let currentWeek = 1;
 
-    // Ensure showPage is defined
+    // Navigation: Show specific page
     window.showPage = function(pageId) {
       console.log('Showing page:', pageId);
       document.querySelectorAll('main section').forEach(section => section.classList.add('hidden'));
@@ -154,92 +154,24 @@
       if (pageId === 'admin') document.getElementById('admin-panel').classList.add('hidden');
     };
 
-    // Initialize Firestore listeners
-    function initFirestore() {
-      if (!db) {
-        console.error('Firestore not initialized');
-        alert('Database not connected. Please check your Firebase setup.');
-        return;
+    // Admin login
+    window.loginAdmin = function() {
+      console.log('Attempting admin login');
+      const password = document.getElementById('admin-password').value;
+      if (password === ADMIN_PASSWORD) {
+        console.log('Admin login successful');
+        document.getElementById('admin-login').classList.add('hidden');
+        document.getElementById('admin-panel').classList.remove('hidden');
+        renderAdminVideos();
+        renderAdminVotes();
+        updateToggleResultsButton();
+      } else {
+        console.log('Admin login failed: incorrect password');
+        alert('Incorrect password.');
       }
-      try {
-        // Ensure week document exists
-        setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible: false }, { merge: true })
-          .then(() => console.log('Week document initialized'))
-          .catch(error => console.error('Error initializing week document:', error));
+    };
 
-        // Listen for videos
-        onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'videos'),
-          snapshot => {
-            videos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log('Videos fetched:', videos);
-            renderVideos();
-            renderVoteForm();
-            renderAdminVideos();
-            renderResults();
-          },
-          error => {
-            console.error('Error fetching videos:', error.message, error.code);
-            alert('Failed to load videos: ' + error.message);
-          }
-        );
-
-        // Listen for votes
-        onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'votes'),
-          snapshot => {
-            votes = snapshot.docs.map(doc => ({ voterName: doc.id, votes: doc.data().votes }));
-            console.log('Votes fetched:', votes);
-            renderAdminVotes();
-            renderResults();
-          },
-          error => {
-            console.error('Error fetching votes:', error.message, error.code);
-            alert('Failed to load votes: ' + error.message);
-          }
-        );
-
-        // Listen for results visibility
-        onSnapshot(doc(db, 'weeks', `week-${currentWeek}`),
-          docSnapshot => {
-            resultsVisible = docSnapshot.data()?.resultsVisible || false;
-            console.log('Results visibility:', resultsVisible);
-            updateToggleResultsButton();
-            renderResults();
-          },
-          error => {
-            console.error('Error fetching results visibility:', error.message, error.code);
-            alert('Failed to load results settings: ' + error.message);
-          }
-        );
-      } catch (error) {
-        console.error('Error initializing Firestore listeners:', error.message, error.code);
-        alert('Error connecting to the database: ' + error.message);
-      }
-    }
-
-    function renderVideos() {
-      const videoList = document.getElementById('video-list');
-      videoList.innerHTML = '';
-      videos.forEach(video => {
-        const div = document.createElement('div');
-        div.innerHTML = `
-          <h3 class="text-lg font-semibold">${video.title}</h3>
-          <div class="video-container">
-            <iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>
-          </div>`;
-        videoList.appendChild(div);
-      });
-    }
-
-    function renderVoteForm() {
-      const selects = [document.getElementById('vote1'), document.getElementById('vote2'), document.getElementById('vote3')];
-      selects.forEach(select => {
-        select.innerHTML = '<option value="">Select a video</option>';
-        videos.forEach(video => {
-          select.innerHTML += `<option value="${video.id}">${video.title}</option>`;
-        });
-      });
-    }
-
+    // Submit vote
     window.submitVote = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
@@ -269,29 +201,14 @@
         document.getElementById('vote-form').reset();
         document.getElementById('vote-message').classList.remove('hidden');
         setTimeout(() => document.getElementById('vote-message').classList.add('hidden'), 3000);
+        console.log('Vote submitted for:', voterName);
       } catch (error) {
         console.error('Error submitting vote:', error.message, error.code);
         alert('Error submitting vote: ' + error.message);
       }
-    }
-
-    window.loginAdmin = function() {
-      console.log('Attempting admin login');
-      const password = document.getElementById('admin-password').value;
-      console.log('Entered password:', password);
-      if (password === ADMIN_PASSWORD) {
-        console.log('Password correct, showing admin panel');
-        document.getElementById('admin-login').classList.add('hidden');
-        document.getElementById('admin-panel').classList.remove('hidden');
-        renderAdminVideos();
-        renderAdminVotes();
-        updateToggleResultsButton();
-      } else {
-        console.log('Incorrect password');
-        alert('Incorrect password.');
-      }
     };
 
+    // Add new video
     window.addVideo = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
@@ -305,133 +222,27 @@
       const id = url.split('v=')[1].split('&')[0];
       const title = `Video ${videos.length + 1}`;
       try {
-        console.log('Adding video:', { title, url: `https://www.youtube.com/embed/${id}` });
-        await setDoc(doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos')), {
-          id: Date.now().toString(),
+        const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
+        await setDoc(videoRef, {
+          id: videoRef.id,
           title,
           url: `https://www.youtube.com/embed/${id}`
         });
         document.getElementById('video-url').value = '';
-        console.log('Video added successfully');
+        console.log('Video added:', title);
       } catch (error) {
         console.error('Error adding video:', error.message, error.code);
         alert('Error adding video: ' + error.message);
-      }
-    }
-
-    window.deleteVideo = async function(videoId) {
-      if (!db) {
-        alert('Database not connected. Please try again later.');
-        return;
-      }
-      try {
-        console.log('Deleting video:', videoId);
-        await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'videos', videoId));
-        const voteDocs = await getDocs(collection(db, 'weeks', `week-${currentWeek}`, 'votes'));
-        for (const voteDoc of voteDocs) {
-          const voteData = voteDoc.data();
-          const updatedVotes = voteData.votes.filter(v => v.id !== videoId);
-          if (updatedVotes.length !== voteData.votes.length) {
-            await setDoc(voteDoc.ref, { votes: updatedVotes });
-          }
-        }
-        console.log('Video deleted successfully');
-      } catch (error) {
-        console.error('Error deleting video:', error.message, error.code);
-        alert('Error deleting video: ' + error.message);
-      }
-    }
-
-    function renderAdminVideos() {
-      const videoList = document.getElementById('admin-video-list');
-      videoList.innerHTML = '';
-      videos.forEach(video => {
-        videoList.innerHTML += `
-          <li class="flex justify-between">
-            <span>${video.title}</span>
-            <button onclick="deleteVideo('${video.id}')" class="text-red-400 hover:text-red-600">Delete</button>
-          </li>`;
-      });
-    }
-
-    window.deleteVote = async function(voterName) {
-      if (!db) {
-        alert('Database not connected. Please try again later.');
-        return;
-      }
-      try {
-        console.log('Deleting vote for:', voterName);
-        await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'votes', voterName));
-        console.log('Vote deleted successfully');
-      } catch (error) {
-        console.error('Error deleting vote:', error.message, error.code);
-        alert('Error deleting vote: ' + error.message);
-      }
-    }
-
-    function renderAdminVotes() {
-      const voteList = document.getElementById('vote-list');
-      voteList.innerHTML = '';
-      votes.forEach(vote => {
-        voteList.innerHTML += `
-          <li class="flex justify-between">
-            <span>${vote.voterName}</span>
-            <button onclick="deleteVote('${vote.voterName}')" class="text-red-400 hover:text-red-600">Delete</button>
-          </li>`;
-      });
-    }
-
-    window.toggleResults = async function() {
-      if (!db) {
-        alert('Database not connected. Please try again later.');
-        return;
-      }
-      try {
-        console.log('Toggling results visibility to:', !resultsVisible);
-        resultsVisible = !resultsVisible;
-        await setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible }, { merge: true });
-        updateToggleResultsButton();
-        console.log('Results visibility updated');
-      } else {
-        console.log('Incorrect password');
-        alert('Incorrect password.');
       }
     };
 
-    window.addVideo = async function() {
-      if (!db) {
-        alert('Database not connected. Please try again later.');
-        return;
-      }
-      const url = document.getElementById('video-url').value.trim();
-      if (!url.includes('youtube.com/watch?v=')) {
-        alert('Please enter a valid YouTube URL.');
-        return;
-      }
-      const id = url.split('v=')[1].split('&')[0];
-      const title = `Video ${videos.length + 1}`;
-      try {
-        console.log('Adding video:', { title, url: `https://www.youtube.com/embed/${id}` });
-        await setDoc(doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos')), {
-          id: Date.now().toString(),
-          title,
-          url: `https://www.youtube.com/embed/${id}`
-        });
-        document.getElementById('video-url').value = '';
-        console.log('Video added successfully');
-      } catch (error) {
-        console.error('Error adding video:', error.message, error.code);
-        alert('Error adding video: ' + error.message);
-      }
-    }
-
+    // Delete video
     window.deleteVideo = async function(videoId) {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
       }
       try {
-        console.log('Deleting video:', videoId);
         await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'videos', videoId));
         const voteDocs = await getDocs(collection(db, 'weeks', `week-${currentWeek}`, 'votes'));
         for (const voteDoc of voteDocs) {
@@ -441,80 +252,51 @@
             await setDoc(voteDoc.ref, { votes: updatedVotes });
           }
         }
-        console.log('Video deleted successfully');
+        console.log('Video deleted:', videoId);
       } catch (error) {
         console.error('Error deleting video:', error.message, error.code);
         alert('Error deleting video: ' + error.message);
       }
-    }
+    };
 
-    function renderAdminVideos() {
-      const videoList = document.getElementById('admin-video-list');
-      videoList.innerHTML = '';
-      videos.forEach(video => {
-        videoList.innerHTML += `
-          <li class="flex justify-between">
-            <span>${video.title}</span>
-            <button onclick="deleteVideo('${video.id}')" class="text-red-400 hover:text-red-600">Delete</button>
-          </li>`;
-      });
-    }
-
+    // Delete vote
     window.deleteVote = async function(voterName) {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
       }
       try {
-        console.log('Deleting vote for:', voterName);
         await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'votes', voterName));
-        console.log('Vote deleted successfully');
+        console.log('Vote deleted for:', voterName);
       } catch (error) {
         console.error('Error deleting vote:', error.message, error.code);
         alert('Error deleting vote: ' + error.message);
       }
-    }
+    };
 
-    function renderAdminVotes() {
-      const voteList = document.getElementById('vote-list');
-      voteList.innerHTML = '';
-      votes.forEach(vote => {
-        voteList.innerHTML += `
-          <li class="flex justify-between">
-            <span>${vote.voterName}</span>
-            <button onclick="deleteVote('${vote.voterName}')" class="text-red-400 hover:text-red-600">Delete</button>
-          </li>`;
-      });
-    }
-
+    // Toggle results visibility
     window.toggleResults = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
       }
       try {
-        console.log('Toggling results visibility to:', !resultsVisible);
         resultsVisible = !resultsVisible;
         await setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible }, { merge: true });
-        updateToggleResultsButton();
-        console.log('Results visibility updated');
+        console.log('Results visibility set to:', resultsVisible);
       } catch (error) {
         console.error('Error toggling results:', error.message, error.code);
         alert('Error toggling results: ' + error.message);
       }
-    }
+    };
 
-    function updateToggleResultsButton() {
-      document.getElementById('toggle-results-btn').textContent = resultsVisible ? 'Hide Results' : 'Show Results';
-    }
-
+    // Reset week
     window.resetWeek = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
         return;
       }
       try {
-        console.log('Resetting to week:', currentWeek + 1);
         currentWeek++;
         videos = [];
         votes = [];
@@ -525,13 +307,71 @@
         renderVoteForm();
         renderAdminVotes();
         updateToggleResultsButton();
-        console.log('Week reset successfully');
+        console.log('Week reset to:', currentWeek);
       } catch (error) {
         console.error('Error resetting week:', error.message, error.code);
         alert('Error resetting week: ' + error.message);
       }
+    };
+
+    // Render videos on Home page
+    function renderVideos() {
+      const videoList = document.getElementById('video-list');
+      videoList.innerHTML = '';
+      videos.forEach(video => {
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <h3 class="text-lg font-semibold">${video.title}</h3>
+          <div class="video-container">
+            <iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>
+          </div>`;
+        videoList.appendChild(div);
+      });
     }
 
+    // Render voting form options
+    function renderVoteForm() {
+      const selects = [document.getElementById('vote1'), document.getElementById('vote2'), document.getElementById('vote3')];
+      selects.forEach(select => {
+        select.innerHTML = '<option value="">Select a video</option>';
+        videos.forEach(video => {
+          select.innerHTML += `<option value="${video.id}">${video.title}</option>`;
+        });
+      });
+    }
+
+    // Render admin video list
+    function renderAdminVideos() {
+      const videoList = document.getElementById('admin-video-list');
+      videoList.innerHTML = '';
+      videos.forEach(video => {
+        videoList.innerHTML += `
+          <li class="flex justify-between">
+            <span>${video.title}</span>
+            <button onclick="deleteVideo('${video.id}')" class="text-red-400 hover:text-red-600">Delete</button>
+          </li>`;
+      });
+    }
+
+    // Render admin vote list
+    function renderAdminVotes() {
+      const voteList = document.getElementById('vote-list');
+      voteList.innerHTML = '';
+      votes.forEach(vote => {
+        voteList.innerHTML += `
+          <li class="flex justify-between">
+            <span>${vote.voterName}</span>
+            <button onclick="deleteVote('${vote.voterName}')" class="text-red-400 hover:text-red-600">Delete</button>
+          </li>`;
+      });
+    }
+
+    // Update results visibility button
+    function updateToggleResultsButton() {
+      document.getElementById('toggle-results-btn').textContent = resultsVisible ? 'Hide Results' : 'Show Results';
+    }
+
+    // Render results page
     function renderResults() {
       const resultsContent = document.getElementById('results-content');
       resultsContent.innerHTML = '';
@@ -552,10 +392,63 @@
       });
     }
 
+    // Initialize Firestore listeners
+    function initFirestore() {
+      if (!db) {
+        console.error('Firestore not initialized');
+        alert('Database not connected. Please check your Firebase setup.');
+        return;
+      }
+      try {
+        // Initialize week document
+        setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible: false }, { merge: true })
+          .then(() => console.log('Week document initialized'))
+          .catch(error => console.error('Error initializing week document:', error));
+
+        // Listen for videos
+        onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'videos'), snapshot => {
+          videos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          console.log('Videos fetched:', videos);
+          renderVideos();
+          renderVoteForm();
+          renderAdminVideos();
+          renderResults();
+        }, error => {
+          console.error('Error fetching videos:', error.message, error.code);
+          alert('Failed to load videos: ' + error.message);
+        });
+
+        // Listen for votes
+        onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'votes'), snapshot => {
+          votes = snapshot.docs.map(doc => ({ voterName: doc.id, votes: doc.data().votes }));
+          console.log('Votes fetched:', votes);
+          renderAdminVotes();
+          renderResults();
+        }, error => {
+          console.error('Error fetching votes:', error.message, error.code);
+          alert('Failed to load votes: ' + error.message);
+        });
+
+        // Listen for results visibility
+        onSnapshot(doc(db, 'weeks', `week-${currentWeek}`), docSnapshot => {
+          resultsVisible = docSnapshot.data()?.resultsVisible || false;
+          console.log('Results visibility:', resultsVisible);
+          updateToggleResultsButton();
+          renderResults();
+        }, error => {
+          console.error('Error fetching results visibility:', error.message, error.code);
+          alert('Failed to load results settings: ' + error.message);
+        });
+      } catch (error) {
+        console.error('Error initializing Firestore listeners:', error.message, error.code);
+        alert('Error connecting to the database: ' + error.message);
+      }
+    }
+
     // Initialize
     console.log('Initializing site');
     initFirestore();
-    showPage('home');
+    window.showPage('home');
   </script>
 </body>
 </html>
