@@ -13,7 +13,7 @@
       color: white;
     }
     .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; }
-    .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    .video-container iframe, .video-container video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col font-sans">
@@ -58,7 +58,7 @@
           <select id="vote3" class="w-full p-2 text-black rounded" required></select>
         </div>
         <button type="button" onclick="submitVote()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Submit Vote</button>
-      </form>
+        </form>
       <p id="vote-message" class="text-green-400 hidden">Vote submitted successfully!</p>
     </section>
 
@@ -71,7 +71,7 @@
     <!-- Video Upload Page -->
     <section id="video-upload" class="hidden space-y-4">
       <h2 class="text-2xl font-semibold">Upload Your Dance Video</h2>
-      <p>Upload your Latino dance video to participate in the contest. Videos will be uploaded to YouTube as unlisted and added to this week's voting options.</p>
+      <p>Upload your Latino dance video to participate in the contest. Videos will be added to this week's voting options after admin review.</p>
       <form id="video-upload-form" class="space-y-4">
         <div>
           <label class="block">Video Title:</label>
@@ -81,7 +81,7 @@
           <label class="block">Video File (MP4, MOV, max 128MB):</label>
           <input type="file" id="video-file" accept="video/mp4,video/mov" class="w-full p-2 text-black rounded" required>
         </div>
-        <button type="button" onclick="signInAndUploadVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Sign In and Upload</button>
+        <button type="button" onclick="uploadVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Upload Video</button>
       </form>
       <p id="upload-message" class="text-green-400 hidden"></p>
     </section>
@@ -127,6 +127,7 @@
     // Import Firebase modular SDK
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
     import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+    import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
     // Firebase configuration (PASTE YOUR WORKING CONFIG HERE)
     const firebaseConfig = {
@@ -139,14 +140,15 @@
   measurementId: "G-L0PSE4Y3KG"
     };
 
-    // Initialize Firebase with error handling
-    let db;
+    // Initialize Firebase
+    let db, storage;
     try {
       if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_WORKING_API_KEY") {
         throw new Error("Invalid or missing API key. Please update firebaseConfig with a valid key.");
       }
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
+      storage = getStorage(app);
       console.log('Firebase initialized successfully');
       // Test Firestore connection
       await setDoc(doc(db, 'test', 'ping'), { timestamp: Date.now() });
@@ -155,10 +157,6 @@
       console.error('Firebase initialization failed:', error.message, error.code);
       alert('Failed to connect to the database. Error: ' + error.message + ' (Code: ' + (error.code || 'N/A') + ')');
     }
-
-    // YouTube API configuration (PASTE YOUR API KEY HERE)
-    const YOUTUBE_API_KEY = 'YAIzaSyBbfPt9_iPMgTTxXb0NVuTlPtGek5RWnr4';
-    const CLIENT_ID = '535208375768-tcd879iol1u6btl9bd5r23i4peibnhpj.apps.googleusercontent.com';
 
     const ADMIN_PASSWORD = "salsa2025"; // Change to a secure password in production
     let videos = [];
@@ -169,44 +167,12 @@
     let unsubscribeVotes = null;
     let unsubscribeWeek = null;
 
-    // Load Google API client library
-    function loadGoogleApiClient() {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.onload = () => {
-          gapi.load('client:auth2', () => {
-            gapi.client.init({
-              apiKey: YOUTUBE_API_KEY,
-              clientId: CLIENT_ID,
-              scope: 'https://www.googleapis.com/auth/youtube.upload',
-              discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest']
-            }).then(resolve).catch(reject);
-          });
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    }
-
-    // Sign in with Google for YouTube API
-    window.signInAndUploadVideo = async function() {
-      if (!db) {
-        alert('Database not connected. Please try again later.');
+    // Upload video to Firebase Storage and save to Firestore
+    window.uploadVideo = async function() {
+      if (!db || !storage) {
+        alert('Database or storage not connected. Please try again later.');
         return;
       }
-      try {
-        await gapi.auth2.getAuthInstance().signIn();
-        console.log('User signed in with Google');
-        uploadVideoToYouTube();
-      } catch (error) {
-        console.error('Error signing in:', error);
-        alert('Failed to sign in with Google: ' + error.message);
-      }
-    };
-
-    // Upload video to YouTube and add to Firestore
-    async function uploadVideoToYouTube() {
       const title = document.getElementById('video-title').value.trim();
       const fileInput = document.getElementById('video-file');
       const file = fileInput.files[0];
@@ -232,55 +198,35 @@
       uploadMessage.classList.add('text-yellow-400');
 
       try {
-        const metadata = {
-          snippet: {
-            title: title,
-            description: 'Latino Dance Video Contest submission',
-            categoryId: '24' // Entertainment
-          },
-          status: {
-            privacyStatus: 'unlisted',
-            embeddable: true
-          }
-        };
-
-        const formData = new FormData();
-        formData.append('snippet', JSON.stringify(metadata.snippet));
-        formData.append('status', JSON.stringify(metadata.status));
-        formData.append('file', file);
-
-        const response = await gapi.client.youtube.videos.insert({
-          part: 'snippet,status',
-          resource: metadata,
-          media: { body: file }
-        });
-
-        const videoId = response.result.id;
-        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-        console.log('Video uploaded to YouTube:', videoId);
+        // Upload to Firebase Storage
+        const storageRef = ref(storage, `videos/${currentWeek}/${file.name}_${Date.now()}`);
+        await uploadBytes(storageRef, file);
+        const downloadUrl = await getDownloadURL(storageRef);
+        console.log('Video uploaded to Firebase Storage:', downloadUrl);
 
         // Add to Firestore
         const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
         await setDoc(videoRef, {
           id: videoRef.id,
           title,
-          url: embedUrl,
-          createdAt: Date.now()
+          url: downloadUrl,
+          createdAt: Date.now(),
+          isYouTube: false
         });
 
         document.getElementById('video-upload-form').reset();
-        uploadMessage.textContent = 'Video uploaded successfully!';
+        uploadMessage.textContent = 'Video uploaded successfully! Awaiting admin review.';
         uploadMessage.classList.remove('text-yellow-400');
         uploadMessage.classList.add('text-green-400');
         setTimeout(() => uploadMessage.classList.add('hidden'), 5000);
         console.log('Video added to Firestore:', title);
       } catch (error) {
-        console.error('Error uploading video:', error);
+        console.error('Error uploading video:', error.message, error.code);
         uploadMessage.textContent = 'Failed to upload video: ' + error.message;
         uploadMessage.classList.remove('text-yellow-400');
         uploadMessage.classList.add('text-red-400');
       }
-    }
+    };
 
     // Navigation: Show specific page
     window.showPage = function(pageId) {
@@ -366,7 +312,8 @@
           id: videoRef.id,
           title,
           url: `https://www.youtube.com/embed/${id}`,
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          isYouTube: true
         });
         document.getElementById('video-url').value = '';
         console.log('Video added:', title);
@@ -488,9 +435,11 @@
       sortedVideos.forEach(video => {
         const div = document.createElement('div');
         div.innerHTML = `
-          <h3 class="text-lg font-semibold">${video.title}</h3>
+          <h3 class="text-lg font-semibold">${video.title}${video.isYouTube ? '' : ' (Pending YouTube)'}</h3>
           <div class="video-container">
-            <iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>
+            ${video.isYouTube ?
+              `<iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>` :
+              `<video controls><source src="${video.url}" type="${video.url.endsWith('.mp4') ? 'video/mp4' : 'video/quicktime'}"></video>`}
           </div>`;
         videoList.appendChild(div);
       });
@@ -502,7 +451,7 @@
       selects.forEach(select => {
         select.innerHTML = '<option value="">Select a video</option>';
         videos.forEach(video => {
-          select.innerHTML += `<option value="${video.id}">${video.title}</option>`;
+          select.innerHTML += `<option value="${video.id}">${video.title}${video.isYouTube ? '' : ' (Pending YouTube)'}</option>`;
         });
       });
     }
@@ -514,7 +463,7 @@
       videos.forEach(video => {
         videoList.innerHTML += `
           <li class="flex justify-between">
-            <span>${video.title}</span>
+            <span>${video.title}${video.isYouTube ? '' : ' (Pending YouTube)'}</span>
             <button onclick="deleteVideo('${video.id}')" class="text-red-400 hover:text-red-600">Delete</button>
           </li>`;
       });
@@ -547,7 +496,7 @@
         return;
       }
       const videoScores = {};
-      videos.forEach(video => videoScores[video.id] = { title: video.title, points: 0, url: video.url });
+      videos.forEach(video => videoScores[video.id] = { title: video.title, points: 0, url: video.url, isYouTube: video.isYouTube });
       votes.forEach(vote => {
         vote.votes.forEach(v => {
           if (videoScores[v.id]) videoScores[v.id].points += v.points;
@@ -558,9 +507,11 @@
       sortedVideos.slice(0, 3).forEach(video => {
         resultsContent.innerHTML += `
           <div class="space-y-2">
-            <p class="text-lg font-semibold">${video.title}: ${video.points} points</p>
+            <p class="text-lg font-semibold">${video.title}${video.isYouTube ? '' : ' (Pending YouTube)'}: ${video.points} points</p>
             <div class="video-container">
-              <iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>
+              ${video.isYouTube ?
+                `<iframe src="${video.url}" frameborder="0" allowfullscreen></iframe>` :
+                `<video controls><source src="${video.url}" type="${video.url.endsWith('.mp4') ? 'video/mp4' : 'video/quicktime'}"></video>`}
             </div>
           </div>`;
       });
@@ -636,12 +587,9 @@
         }
         console.log('Current week loaded:', currentWeek);
         initFirestore();
-        // Load Google API client
-        await loadGoogleApiClient();
-        console.log('Google API client loaded');
         window.showPage('home');
       } catch (error) {
-        console.error('Error loading current week or Google API:', error.message, error.code);
+        console.error('Error loading current week:', error.message, error.code);
         alert('Error initializing site: ' + error.message);
       }
     }
