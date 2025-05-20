@@ -23,6 +23,7 @@
       <button onclick="showPage('home')" class="mx-2 text-white hover:underline">Home</button>
       <button onclick="showPage('voting')" class="mx-2 text-white hover:underline">Voting</button>
       <button onclick="showPage('results')" class="mx-2 text-white hover:underline">Results</button>
+      <button onclick="showPage('video-upload')" class="mx-2 text-white hover:underline">Video Upload</button>
       <button onclick="showPage('admin')" class="mx-2 text-white hover:underline">Admin</button>
     </nav>
   </header>
@@ -65,6 +66,24 @@
     <section id="results" class="hidden space-y-4">
       <h2 class="text-2xl font-semibold">Voting Results</h2>
       <div id="results-content"></div>
+    </section>
+
+    <!-- Video Upload Page -->
+    <section id="video-upload" class="hidden space-y-4">
+      <h2 class="text-2xl font-semibold">Upload Your Dance Video</h2>
+      <p>Upload your Latino dance video to participate in the contest. Videos will be uploaded to YouTube as unlisted and added to this week's voting options.</p>
+      <form id="video-upload-form" class="space-y-4">
+        <div>
+          <label class="block">Video Title:</label>
+          <input type="text" id="video-title" class="w-full p-2 text-black rounded" required>
+        </div>
+        <div>
+          <label class="block">Video File (MP4, MOV, max 128MB):</label>
+          <input type="file" id="video-file" accept="video/mp4,video/mov" class="w-full p-2 text-black rounded" required>
+        </div>
+        <button type="button" onclick="signInAndUploadVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Sign In and Upload</button>
+      </form>
+      <p id="upload-message" class="text-green-400 hidden"></p>
     </section>
 
     <!-- Admin Page -->
@@ -137,6 +156,10 @@
       alert('Failed to connect to the database. Error: ' + error.message + ' (Code: ' + (error.code || 'N/A') + ')');
     }
 
+    // YouTube API configuration (PASTE YOUR API KEY HERE)
+    const YOUTUBE_API_KEY = 'YOUR_YOUTUBE_API_KEY';
+    const CLIENT_ID = 'YOUR_OAUTH_CLIENT_ID';
+
     const ADMIN_PASSWORD = "salsa2025"; // Change to a secure password in production
     let videos = [];
     let votes = [];
@@ -145,6 +168,119 @@
     let unsubscribeVideos = null;
     let unsubscribeVotes = null;
     let unsubscribeWeek = null;
+
+    // Load Google API client library
+    function loadGoogleApiClient() {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://apis.google.com/js/api.js';
+        script.onload = () => {
+          gapi.load('client:auth2', () => {
+            gapi.client.init({
+              apiKey: YOUTUBE_API_KEY,
+              clientId: CLIENT_ID,
+              scope: 'https://www.googleapis.com/auth/youtube.upload',
+              discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest']
+            }).then(resolve).catch(reject);
+          });
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    // Sign in with Google for YouTube API
+    window.signInAndUploadVideo = async function() {
+      if (!db) {
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      try {
+        await gapi.auth2.getAuthInstance().signIn();
+        console.log('User signed in with Google');
+        uploadVideoToYouTube();
+      } catch (error) {
+        console.error('Error signing in:', error);
+        alert('Failed to sign in with Google: ' + error.message);
+      }
+    };
+
+    // Upload video to YouTube and add to Firestore
+    async function uploadVideoToYouTube() {
+      const title = document.getElementById('video-title').value.trim();
+      const fileInput = document.getElementById('video-file');
+      const file = fileInput.files[0];
+      const uploadMessage = document.getElementById('upload-message');
+
+      if (!title || !file) {
+        alert('Please provide a title and select a video file.');
+        return;
+      }
+
+      if (file.size > 128 * 1024 * 1024) {
+        alert('File size exceeds 128MB limit.');
+        return;
+      }
+
+      if (!['video/mp4', 'video/mov'].includes(file.type)) {
+        alert('Please upload an MP4 or MOV file.');
+        return;
+      }
+
+      uploadMessage.textContent = 'Uploading video...';
+      uploadMessage.classList.remove('hidden', 'text-green-400');
+      uploadMessage.classList.add('text-yellow-400');
+
+      try {
+        const metadata = {
+          snippet: {
+            title: title,
+            description: 'Latino Dance Video Contest submission',
+            categoryId: '24' // Entertainment
+          },
+          status: {
+            privacyStatus: 'unlisted',
+            embeddable: true
+          }
+        };
+
+        const formData = new FormData();
+        formData.append('snippet', JSON.stringify(metadata.snippet));
+        formData.append('status', JSON.stringify(metadata.status));
+        formData.append('file', file);
+
+        const response = await gapi.client.youtube.videos.insert({
+          part: 'snippet,status',
+          resource: metadata,
+          media: { body: file }
+        });
+
+        const videoId = response.result.id;
+        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+        console.log('Video uploaded to YouTube:', videoId);
+
+        // Add to Firestore
+        const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
+        await setDoc(videoRef, {
+          id: videoRef.id,
+          title,
+          url: embedUrl,
+          createdAt: Date.now()
+        });
+
+        document.getElementById('video-upload-form').reset();
+        uploadMessage.textContent = 'Video uploaded successfully!';
+        uploadMessage.classList.remove('text-yellow-400');
+        uploadMessage.classList.add('text-green-400');
+        setTimeout(() => uploadMessage.classList.add('hidden'), 5000);
+        console.log('Video added to Firestore:', title);
+      } catch (error) {
+        console.error('Error uploading video:', error);
+        uploadMessage.textContent = 'Failed to upload video: ' + error.message;
+        uploadMessage.classList.remove('text-yellow-400');
+        uploadMessage.classList.add('text-red-400');
+      }
+    }
 
     // Navigation: Show specific page
     window.showPage = function(pageId) {
@@ -211,7 +347,7 @@
       }
     };
 
-    // Add new video
+    // Add new video (Admin)
     window.addVideo = async function() {
       if (!db) {
         alert('Database not connected. Please try again later.');
@@ -500,9 +636,12 @@
         }
         console.log('Current week loaded:', currentWeek);
         initFirestore();
+        // Load Google API client
+        await loadGoogleApiClient();
+        console.log('Google API client loaded');
         window.showPage('home');
       } catch (error) {
-        console.error('Error loading current week:', error.message, error.code);
+        console.error('Error loading current week or Google API:', error.message, error.code);
         alert('Error initializing site: ' + error.message);
       }
     }
