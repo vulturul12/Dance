@@ -226,7 +226,8 @@
         await setDoc(videoRef, {
           id: videoRef.id,
           title,
-          url: `https://www.youtube.com/embed/${id}`
+          url: `https://www.youtube.com/embed/${id}`,
+          createdAt: Date.now()
         });
         document.getElementById('video-url').value = '';
         console.log('Video added:', title);
@@ -314,11 +315,13 @@
       }
     };
 
-    // Render videos on Home page
+    // Render videos on Home page (sorted by upload order)
     function renderVideos() {
       const videoList = document.getElementById('video-list');
       videoList.innerHTML = '';
-      videos.forEach(video => {
+      // Sort videos by createdAt (earliest first), fallback to Infinity for old videos
+      const sortedVideos = videos.sort((a, b) => (a.createdAt || Infinity) - (b.createdAt || Infinity));
+      sortedVideos.forEach(video => {
         const div = document.createElement('div');
         div.innerHTML = `
           <h3 class="text-lg font-semibold">${video.title}</h3>
@@ -371,7 +374,7 @@
       document.getElementById('toggle-results-btn').textContent = resultsVisible ? 'Hide Results' : 'Show Results';
     }
 
-    // Render results page
+    // Render results page (top 3 videos with points)
     function renderResults() {
       const resultsContent = document.getElementById('results-content');
       resultsContent.innerHTML = '';
@@ -387,7 +390,8 @@
         });
       });
       const sortedVideos = Object.values(videoScores).sort((a, b) => b.points - a.points);
-      sortedVideos.forEach(video => {
+      // Display only top 3 videos
+      sortedVideos.slice(0, 3).forEach(video => {
         resultsContent.innerHTML += `<p>${video.title}: ${video.points} points</p>`;
       });
     }
