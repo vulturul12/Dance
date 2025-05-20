@@ -24,7 +24,7 @@
       <button onclick="showPage('home')" class="mx-2 text-white hover:underline">Home</button>
       <button onclick="showPage('voting')" class="mx-2 text-white hover:underline">Voting</button>
       <button onclick="showPage('results')" class="mx-2 text-white hover:underline">Results</button>
-      <button onclick="showPage('video-proposal')" class="mx-2 text-white hover:underline">Video Proposal</button>
+      <button onclick="showPage('video-proposal')" class="mx-2 text-white hover:underline">Video Submission</button>
       <button onclick="showPage('admin')" class="mx-2 text-white hover:underline">Admin</button>
     </nav>
   </header>
@@ -69,10 +69,10 @@
       <div id="results-content"></div>
     </section>
 
-    <!-- Video Proposal Page -->
+    <!-- Video Submission Page -->
     <section id="video-proposal" class="hidden space-y-4">
-      <h2 class="text-2xl font-semibold">Propose a Dance Video</h2>
-      <p>Submit a YouTube video link to be included in the contest. An admin may review or remove your submission.</p>
+      <h2 class="text-2xl font-semibold">Submit a Dance Video</h2>
+      <p>Add a YouTube video link to include it in the contest. An admin may review or remove your submission.</p>
       <div class="bg-gray-800 p-4 rounded mb-4">
         <div class="flex justify-between items-center">
           <h3 class="text-xl font-semibold">How to Upload a Video from Your Phone</h3>
@@ -85,23 +85,19 @@
             <li><strong>Upload Video</strong>: Tap the <strong>+</strong> (plus) icon. Select <strong>Upload a video</strong>. Choose your dance video from your phone’s gallery.</li>
             <li><strong>Set Details</strong>: Add a title (e.g., "My Salsa Dance"). For visibility, select <strong>Unlisted</strong> (not Public or Private) so only those with the link can view it.</li>
             <li><strong>Publish</strong>: Tap <strong>Next</strong> or <strong>Publish</strong>. Wait for the upload to complete (time depends on video size and internet speed).</li>
-            <li><strong>Copy Link</strong>: Once uploaded, tap <strong>Share</strong> (or find the video in <strong>Your videos</strong>). Select <strong>Copy link</strong>. Paste this link into the proposal form below.</li>
+            <li><strong>Copy Link</strong>: Once uploaded, tap <strong>Share</strong> (or find the video in <strong>Your videos</strong>). Select <strong>Copy link</strong>. Paste this link into the form below.</li>
           </ol>
           <p class="mt-2"><strong>Note</strong>: Ensure your video is under 15 minutes (or verify your account for longer videos).</p>
         </div>
       </div>
-      <form id="proposal-form" class="space-y-4">
-        <div>
-          <label class="block">Video Title:</label>
-          <input type="text" id="proposal-title" class="w-full p-2 text-black rounded" required>
-        </div>
+      <form id="submission-form" class="space-y-4">
         <div>
           <label class="block">YouTube Video URL:</label>
-          <input type="text" id="proposal-url" class="w-full p-2 text-black rounded" placeholder="https://www.youtube.com/watch?v=..." required>
+          <input type="text" id="submission-url" class="w-full p-2 text-black rounded" placeholder="https://www.youtube.com/watch?v=..." required>
         </div>
-        <button type="button" onclick="submitProposal()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Submit Proposal</button>
+        <button type="button" onclick="submitVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Submit Video</button>
       </form>
-      <p id="proposal-message" class="text-green-400 hidden">Proposal submitted successfully!</p>
+      <p id="submission-message" class="text-green-400 hidden">Video submitted successfully!</p>
     </section>
 
     <!-- Admin Page -->
@@ -119,10 +115,6 @@
           <h3 class="text-xl">Add New Video</h3>
           <input type="text" id="video-url" class="w-full p-2 text-black rounded" placeholder="YouTube Video URL">
           <button onclick="addVideo()" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">Add Video</button>
-        </div>
-        <div>
-          <h3 class="text-xl">Video Proposals</h3>
-          <ul id="proposal-list" class="space-y-2"></ul>
         </div>
         <div>
           <h3 class="text-xl">Current Videos</h3>
@@ -183,14 +175,12 @@
     const ADMIN_PASSWORD = "salsa2025"; // Change to a secure password in production
     let videos = [];
     let votes = [];
-    let proposals = [];
     let resultsVisible = false;
     let currentWeek = 1;
     let isAdminLoggedIn = false; // Track admin login state
     let unsubscribeVideos = null;
     let unsubscribeVotes = null;
     let unsubscribeWeek = null;
-    let unsubscribeProposals = null;
 
     // Function to extract YouTube video ID from various URL formats
     function getYouTubeVideoId(url) {
@@ -222,84 +212,36 @@
       }
     };
 
-    // Submit video proposal
-    window.submitProposal = async function() {
+    // Submit video (from Video Submission tab)
+    window.submitVideo = async function() {
       if (!db) {
-        console.error('Database not connected in submitProposal');
+        console.error('Database not connected in submitVideo');
         alert('Database not connected. Please try again later.');
         return;
       }
-      const title = document.getElementById('proposal-title').value.trim();
-      const url = document.getElementById('proposal-url').value.trim();
-
-      if (!title || !url) {
-        console.error('Missing title or URL:', { title, url });
-        alert('Please provide a title and YouTube URL.');
-        return;
-      }
+      const url = document.getElementById('submission-url').value.trim();
       const videoId = getYouTubeVideoId(url);
       if (!videoId) {
-        console.error('Invalid YouTube URL in submitProposal:', url);
+        console.error('Invalid YouTube URL in submitVideo:', url);
         alert('Please enter a valid YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID).');
         return;
       }
-
+      const title = `Video ${videos.length + 1}`;
       try {
-        // Store in proposals for admin review/deletion
-        const proposalRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'proposals'));
-        await setDoc(proposalRef, {
-          id: proposalRef.id,
-          title,
-          url,
-          videoId: proposalRef.id, // Link proposal to video
-          createdAt: Date.now(),
-          status: 'pending'
-        });
-
-        // Store in videos for contest
-        const videoRef = doc(db, 'weeks', `week-${currentWeek}`, 'videos', proposalRef.id);
+        const videoRef = doc(collection(db, 'weeks', `week-${currentWeek}`, 'videos'));
         await setDoc(videoRef, {
           id: videoRef.id,
           title,
           url: `https://www.youtube.com/embed/${videoId}`,
           createdAt: Date.now()
         });
-
-        document.getElementById('proposal-form').reset();
-        document.getElementById('proposal-message').classList.remove('hidden');
-        setTimeout(() => document.getElementById('proposal-message').classList.add('hidden'), 3000);
-        console.log('Proposal and video submitted:', title, 'URL:', url, 'Video ID:', videoId);
+        document.getElementById('submission-form').reset();
+        document.getElementById('submission-message').classList.remove('hidden');
+        setTimeout(() => document.getElementById('submission-message').classList.add('hidden'), 3000);
+        console.log('Video submitted:', title, 'URL:', url);
       } catch (error) {
-        console.error('Error submitting proposal:', error.message, error.code, 'URL:', url);
-        alert('Error submitting proposal: ' + error.message);
-      }
-    };
-
-    // Delete video proposal
-    window.deleteProposal = async function(proposalId) {
-      if (!db) {
-        console.error('Database not connected in deleteProposal');
-        alert('Database not connected. Please try again later.');
-        return;
-      }
-      try {
-        // Delete from proposals
-        await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'proposals', proposalId));
-        // Delete from videos
-        await deleteDoc(doc(db, 'weeks', `week-${currentWeek}`, 'videos', proposalId));
-        // Update votes
-        const voteDocs = await getDocs(collection(db, 'weeks', `week-${currentWeek}`, 'votes'));
-        for (const voteDoc of voteDocs) {
-          const voteData = voteDoc.data();
-          const updatedVotes = voteData.votes.filter(v => v.id !== proposalId);
-          if (updatedVotes.length !== voteData.votes.length) {
-            await setDoc(voteDoc.ref, { votes: updatedVotes });
-          }
-        }
-        console.log('Proposal and video deleted:', proposalId);
-      } catch (error) {
-        console.error('Error deleting proposal:', error.message, error.code);
-        alert('Error deleting proposal: ' + error.message);
+        console.error('Error submitting video:', error.message, error.code, 'URL:', url);
+        alert('Error submitting video: ' + error.message);
       }
     };
 
@@ -317,7 +259,6 @@
           document.getElementById('admin-panel').classList.remove('hidden');
           renderAdminVideos();
           renderAdminVotes();
-          renderProposals();
           updateToggleResultsButton();
         } else {
           document.getElementById('admin-login').classList.remove('hidden');
@@ -338,7 +279,6 @@
         document.getElementById('admin-password').value = '';
         renderAdminVideos();
         renderAdminVotes();
-        renderProposals();
         updateToggleResultsButton();
       } else {
         console.log('Admin login failed: incorrect password');
@@ -496,7 +436,7 @@
         currentWeek++;
         console.log('Resetting to week:', currentWeek);
 
-        // Delete all videos, votes, and proposals from the old week
+        // Delete all videos and votes from the old week
         const oldVideos = await getDocs(collection(db, 'weeks', `week-${oldWeek}`, 'videos'));
         for (const doc of oldVideos.docs) {
           await deleteDoc(doc.ref);
@@ -505,16 +445,11 @@
         for (const doc of oldVotes.docs) {
           await deleteDoc(doc.ref);
         }
-        const oldProposals = await getDocs(collection(db, 'weeks', `week-${oldWeek}`, 'proposals'));
-        for (const doc of oldProposals.docs) {
-          await deleteDoc(doc.ref);
-        }
-        console.log(`Cleared videos, votes, and proposals for week-${oldWeek}`);
+        console.log(`Cleared videos and votes for week-${oldWeek}`);
 
         // Initialize new week
         videos = [];
         votes = [];
-        proposals = [];
         resultsVisible = false;
         await setDoc(doc(db, 'weeks', `week-${currentWeek}`), { resultsVisible: false });
         await setDoc(doc(db, 'weeks', 'current'), { week: currentWeek });
@@ -524,7 +459,6 @@
         if (unsubscribeVideos) unsubscribeVideos();
         if (unsubscribeVotes) unsubscribeVotes();
         if (unsubscribeWeek) unsubscribeWeek();
-        if (unsubscribeProposals) unsubscribeProposals();
         initFirestore();
 
         // Update UI
@@ -532,7 +466,6 @@
         renderVideos();
         renderVoteForm();
         renderAdminVotes();
-        renderProposals();
         updateToggleResultsButton();
         console.log('Week reset complete');
       } catch (error) {
@@ -591,23 +524,6 @@
             <span>${vote.voterName}</span>
             <button onclick="deleteVote('${vote.voterName}')" class="text-red-400 hover:text-red-600">Delete</button>
           </li>`;
-      });
-    }
-
-    // Render video proposals
-    function renderProposals() {
-      const proposalList = document.getElementById('proposal-list');
-      proposalList.innerHTML = '';
-      proposals.forEach(proposal => {
-        if (proposal.status === 'pending') {
-          proposalList.innerHTML += `
-            <li class="flex justify-between items-center">
-              <span>${proposal.title} (<a href="${proposal.url}" target="_blank" class="text-blue-400 hover:underline">View</a>)</span>
-              <div>
-                <button onclick="deleteProposal('${proposal.id}')" class="text-red-400 hover:text-red-600">Delete</button>
-              </div>
-            </li>`;
-        }
       });
     }
 
@@ -675,15 +591,6 @@
         }, error => {
           console.error('Error fetching votes:', error.message, error.code);
           alert('Failed to load votes: ' + error.message);
-        });
-
-        unsubscribeProposals = onSnapshot(collection(db, 'weeks', `week-${currentWeek}`, 'proposals'), snapshot => {
-          proposals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          console.log('Proposals fetched for week-', currentWeek, ':', proposals);
-          renderProposals();
-        }, error => {
-          console.error('Error fetching proposals:', error.message, error.code);
-          alert('Failed to load proposals: ' + error.message);
         });
 
         unsubscribeWeek = onSnapshot(doc(db, 'weeks', `week-${currentWeek}`), docSnapshot => {
