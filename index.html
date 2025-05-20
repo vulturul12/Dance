@@ -194,9 +194,19 @@
 
     // Function to extract YouTube video ID from various URL formats
     function getYouTubeVideoId(url) {
-      const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-      const match = url.match(regex);
-      return match ? match[1] : null;
+      try {
+        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?\/\s]{11})/i;
+        const match = url.match(regex);
+        if (match && match[1]) {
+          console.log('Extracted YouTube video ID:', match[1], 'from URL:', url);
+          return match[1];
+        }
+        console.error('Invalid YouTube URL:', url);
+        return null;
+      } catch (error) {
+        console.error('Error parsing YouTube URL:', error.message, 'URL:', url);
+        return null;
+      }
     }
 
     // Toggle tutorial visibility
@@ -215,6 +225,7 @@
     // Submit video proposal
     window.submitProposal = async function() {
       if (!db) {
+        console.error('Database not connected in submitProposal');
         alert('Database not connected. Please try again later.');
         return;
       }
@@ -222,12 +233,14 @@
       const url = document.getElementById('proposal-url').value.trim();
 
       if (!title || !url) {
+        console.error('Missing title or URL:', { title, url });
         alert('Please provide a title and YouTube URL.');
         return;
       }
       const videoId = getYouTubeVideoId(url);
       if (!videoId) {
-        alert('Please enter a valid YouTube URL.');
+        console.error('Invalid YouTube URL in submitProposal:', url);
+        alert('Please enter a valid YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID).');
         return;
       }
 
@@ -243,9 +256,9 @@
         document.getElementById('proposal-form').reset();
         document.getElementById('proposal-message').classList.remove('hidden');
         setTimeout(() => document.getElementById('proposal-message').classList.add('hidden'), 3000);
-        console.log('Proposal submitted:', title);
+        console.log('Proposal submitted:', title, 'URL:', url);
       } catch (error) {
-        console.error('Error submitting proposal:', error.message, error.code);
+        console.error('Error submitting proposal:', error.message, error.code, 'URL:', url);
         alert('Error submitting proposal: ' + error.message);
       }
     };
@@ -253,12 +266,14 @@
     // Approve video proposal
     window.approveProposal = async function(proposalId, title, url) {
       if (!db) {
+        console.error('Database not connected in approveProposal');
         alert('Database not connected. Please try again later.');
         return;
       }
       try {
         const videoId = getYouTubeVideoId(url);
         if (!videoId) {
+          console.error('Invalid YouTube URL in approveProposal:', url);
           alert('Invalid YouTube URL in proposal.');
           return;
         }
@@ -270,9 +285,9 @@
           createdAt: Date.now()
         });
         await setDoc(doc(db, 'weeks', `week-${currentWeek}`, 'proposals', proposalId), { status: 'approved' }, { merge: true });
-        console.log('Proposal approved:', proposalId);
+        console.log('Proposal approved:', proposalId, 'Title:', title, 'URL:', url);
       } catch (error) {
-        console.error('Error approving proposal:', error.message, error.code);
+        console.error('Error approving proposal:', error.message, error.code, 'URL:', url);
         alert('Error approving proposal: ' + error.message);
       }
     };
@@ -280,6 +295,7 @@
     // Delete video proposal
     window.deleteProposal = async function(proposalId) {
       if (!db) {
+        console.error('Database not connected in deleteProposal');
         alert('Database not connected. Please try again later.');
         return;
       }
@@ -347,6 +363,7 @@
     // Submit vote
     window.submitVote = async function() {
       if (!db) {
+        console.error('Database not connected in submitVote');
         alert('Database not connected. Please try again later.');
         return;
       }
@@ -356,16 +373,20 @@
       const vote3 = document.getElementById('vote3').value;
 
       if (!voterName || !vote1 || !vote2 || !vote3) {
+        console.error('Missing vote fields:', { voterName, vote1, vote2, vote3 });
         alert('Please fill in all fields.');
         return;
       }
       if (vote1 === vote2 || vote2 === vote3 || vote1 === vote3) {
+        console.error('Duplicate video selections:', { vote1, vote2, vote3 });
         alert('Please select different videos for each choice.');
         return;
+      }
       try {
         const voteRef = doc(db, 'weeks', `week-${currentWeek}`, 'votes', voterName);
         const docSnap = await getDoc(voteRef);
         if (docSnap.exists()) {
+          console.log('Duplicate vote attempt by:', voterName);
           alert('You have already voted this week.');
           return;
         }
@@ -383,13 +404,15 @@
     // Add new video (Admin)
     window.addVideo = async function() {
       if (!db) {
+        console.error('Database not connected in addVideo');
         alert('Database not connected. Please try again later.');
         return;
       }
       const url = document.getElementById('video-url').value.trim();
       const videoId = getYouTubeVideoId(url);
       if (!videoId) {
-        alert('Please enter a valid YouTube URL.');
+        console.error('Invalid YouTube URL in addVideo:', url);
+        alert('Please enter a valid YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID).');
         return;
       }
       const title = `Video ${videos.length + 1}`;
@@ -402,9 +425,9 @@
           createdAt: Date.now()
         });
         document.getElementById('video-url').value = '';
-        console.log('Video added:', title);
+        console.log('Video added:', title, 'URL:', url);
       } catch (error) {
-        console.error('Error adding video:', error.message, error.code);
+        console.error('Error adding video:', error.message, error.code, 'URL:', url);
         alert('Error adding video: ' + error.message);
       }
     };
@@ -412,6 +435,7 @@
     // Delete video
     window.deleteVideo = async function(videoId) {
       if (!db) {
+        console.error('Database not connected in deleteVideo');
         alert('Database not connected. Please try again later.');
         return;
       }
@@ -435,6 +459,7 @@
     // Delete vote
     window.deleteVote = async function(voterName) {
       if (!db) {
+        console.error('Database not connected in deleteVote');
         alert('Database not connected. Please try again later.');
         return;
       }
@@ -450,6 +475,7 @@
     // Toggle results visibility
     window.toggleResults = async function() {
       if (!db) {
+        console.error('Database not connected in toggleResults');
         alert('Database not connected. Please try again later.');
         return;
       }
@@ -466,6 +492,7 @@
     // Reset week
     window.resetWeek = async function() {
       if (!db) {
+        console.error('Database not connected in resetWeek');
         alert('Database not connected. Please try again later.');
         return;
       }
