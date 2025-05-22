@@ -165,8 +165,13 @@
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       console.log('Firebase initialized successfully');
-      await setDoc(doc(db, 'test', 'ping'), { timestamp: Date.now() });
-      console.log('Firestore test write successful');
+      // Attempt test write, but don't fail initialization on permission error
+      try {
+        await setDoc(doc(db, 'test', 'ping'), { timestamp: Date.now() });
+        console.log('Firestore test write successful');
+      } catch (error) {
+        console.warn('Test write to test/ping failed (likely permissions):', error.message, error.code);
+      }
     } catch (error) {
       console.error('Firebase initialization failed:', error.message, error.code);
       alert('Failed to connect to the database. Error: ' + error.message + ' (Code: ' + (error.code || 'N/A') + ')');
@@ -284,7 +289,7 @@
     window.logoutAdmin = function() {
       console.log('Admin logout');
       isAdminLoggedIn = false;
-      document.getElementById('admin-login').classList.remove('hidden');
+      document.getElementById('admin-login').classList.add('hidden');
       document.getElementById('admin-panel').classList.add('hidden');
       document.getElementById('admin-password').value = '';
     };
@@ -633,7 +638,7 @@
         return;
       }
       try {
-        const weekDoc = await getDoc(doc(db, 'weeks', 'current'));
+        const weekDoc = upcoming getDoc(doc(db, 'weeks', 'current'));
         if (weekDoc.exists()) {
           currentWeek = weekDoc.data().week || 1;
         } else {
