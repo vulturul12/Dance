@@ -181,10 +181,32 @@
     let votes = [];
     let resultsVisible = false;
     let currentWeek = 1;
-    let isAdminLoggedIn = false; // Track admin login state
+    let isAdminLoggedIn = false;
     let unsubscribeVideos = null;
     let unsubscribeVotes = null;
     let unsubscribeWeek = null;
+
+    console.log('Defining showPage function');
+    window.showPage = function(pageId) {
+      console.log('Showing page:', pageId);
+      document.querySelectorAll('main section').forEach(section => section.classList.add('hidden'));
+      document.getElementById(pageId).classList.remove('hidden');
+      if (pageId === 'home') renderVideos();
+      if (pageId === 'voting') renderVoteForm();
+      if (pageId === 'results') renderResults();
+      if (pageId === 'admin') {
+        if (isAdminLoggedIn) {
+          document.getElementById('admin-login').classList.add('hidden');
+          document.getElementById('admin-panel').classList.remove('hidden');
+          renderAdminVideos();
+          renderAdminVotes();
+          updateToggleResultsButton();
+        } else {
+          document.getElementById('admin-login').classList.remove('hidden');
+          document.getElementById('admin-panel').classList.add('hidden');
+        }
+      }
+    };
 
     // Function to extract YouTube video ID from various URL formats
     function getYouTubeVideoId(url) {
@@ -289,31 +311,9 @@
     window.logoutAdmin = function() {
       console.log('Admin logout');
       isAdminLoggedIn = false;
-      document.getElementById('admin-login').classList.add('hidden');
+      document.getElementById('admin-login').classList.remove('hidden');
       document.getElementById('admin-panel').classList.add('hidden');
       document.getElementById('admin-password').value = '';
-    };
-
-    // Navigation: Show specific page
-    window.showPage = function(pageId) {
-      console.log('Showing page:', pageId);
-      document.querySelectorAll('main section').forEach(section => section.classList.add('hidden'));
-      document.getElementById(pageId).classList.remove('hidden');
-      if (pageId === 'home') renderVideos();
-      if (pageId === 'voting') renderVoteForm();
-      if (pageId === 'results') renderResults();
-      if (pageId === 'admin') {
-        if (isAdminLoggedIn) {
-          document.getElementById('admin-login').classList.add('hidden');
-          document.getElementById('admin-panel').classList.remove('hidden');
-          renderAdminVideos();
-          renderAdminVotes();
-          updateToggleResultsButton();
-        } else {
-          document.getElementById('admin-login').classList.remove('hidden');
-          document.getElementById('admin-panel').classList.add('hidden');
-        }
-      }
     };
 
     // Submit vote
@@ -638,7 +638,7 @@
         return;
       }
       try {
-        const weekDoc = upcoming getDoc(doc(db, 'weeks', 'current'));
+        const weekDoc = await getDoc(doc(db, 'weeks', 'current'));
         if (weekDoc.exists()) {
           currentWeek = weekDoc.data().week || 1;
         } else {
@@ -646,13 +646,14 @@
         }
         console.log('Current week loaded:', currentWeek);
         initFirestore();
-        window.showPage('home');
+        window.showPage('home'); // Ensure initial page is shown
       } catch (error) {
         console.error('Error loading current week:', error.message, error.code);
         alert('Error initializing site: ' + error.message);
       }
     }
 
+    console.log('Calling initialize');
     initialize();
   </script>
 </body>
