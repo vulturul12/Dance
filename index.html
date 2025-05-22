@@ -8,7 +8,7 @@
   <style>
     body {
       background-color: #1a202c;
-      background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('https://github.com/vulturul12/Dance/blob/main/background.jpg?raw=true');
+      background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('https://raw.githubusercontent.com/your-username/your-repo/main/background.jpg');
       background-size: cover;
       background-attachment: fixed;
       color: white;
@@ -172,7 +172,6 @@
       alert('Failed to connect to the database. Error: ' + error.message + ' (Code: ' + (error.code || 'N/A') + ')');
     }
 
-    const ADMIN_PASSWORD = "salsa2025"; // Change to a secure password in production
     let videos = [];
     let votes = [];
     let resultsVisible = false;
@@ -245,6 +244,51 @@
       }
     };
 
+    // Admin login
+    window.loginAdmin = async function() {
+      console.log('Attempting admin login');
+      const password = document.getElementById('admin-password').value;
+      if (!db) {
+        console.error('Database not connected in loginAdmin');
+        alert('Database not connected. Please try again later.');
+        return;
+      }
+      try {
+        const adminDoc = await getDoc(doc(db, 'config', 'admin'));
+        if (!adminDoc.exists()) {
+          console.error('Admin config not found');
+          alert('Admin configuration not found. Please contact support.');
+          return;
+        }
+        const adminPassword = adminDoc.data().password;
+        if (password === adminPassword) {
+          console.log('Admin login successful');
+          isAdminLoggedIn = true;
+          document.getElementById('admin-login').classList.add('hidden');
+          document.getElementById('admin-panel').classList.remove('hidden');
+          document.getElementById('admin-password').value = '';
+          renderAdminVideos();
+          renderAdminVotes();
+          updateToggleResultsButton();
+        } else {
+          console.log('Admin login failed: incorrect password');
+          alert('Incorrect password.');
+        }
+      } catch (error) {
+        console.error('Error fetching admin password:', error.message, error.code);
+        alert('Error during login: ' + error.message);
+      }
+    };
+
+    // Admin logout
+    window.logoutAdmin = function() {
+      console.log('Admin logout');
+      isAdminLoggedIn = false;
+      document.getElementById('admin-login').classList.add('hidden');
+      document.getElementById('admin-panel').classList.add('hidden');
+      document.getElementById('admin-password').value = '';
+    };
+
     // Navigation: Show specific page
     window.showPage = function(pageId) {
       console.log('Showing page:', pageId);
@@ -265,34 +309,6 @@
           document.getElementById('admin-panel').classList.add('hidden');
         }
       }
-    };
-
-    // Admin login
-    window.loginAdmin = function() {
-      console.log('Attempting admin login');
-      const password = document.getElementById('admin-password').value;
-      if (password === ADMIN_PASSWORD) {
-        console.log('Admin login successful');
-        isAdminLoggedIn = true;
-        document.getElementById('admin-login').classList.add('hidden');
-        document.getElementById('admin-panel').classList.remove('hidden');
-        document.getElementById('admin-password').value = '';
-        renderAdminVideos();
-        renderAdminVotes();
-        updateToggleResultsButton();
-      } else {
-        console.log('Admin login failed: incorrect password');
-        alert('Incorrect password.');
-      }
-    };
-
-    // Admin logout
-    window.logoutAdmin = function() {
-      console.log('Admin logout');
-      isAdminLoggedIn = false;
-      document.getElementById('admin-login').classList.remove('hidden');
-      document.getElementById('admin-panel').classList.add('hidden');
-      document.getElementById('admin-password').value = '';
     };
 
     // Submit vote
